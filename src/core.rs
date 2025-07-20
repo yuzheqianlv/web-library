@@ -52,7 +52,7 @@ pub enum MonolithOutputFormat {
     // HAR,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MonolithOptions {
     pub base_url: Option<String>,
     pub blacklist_domains: bool,

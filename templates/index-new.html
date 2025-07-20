@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monolith 网页翻译器</title>
+    <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+    <!-- 置顶导航栏 -->
+    <nav class="navbar" id="navbar">
+        <!-- 隐藏/显示按钮 -->
+        <button class="toggle-nav-btn" id="toggle-nav-btn" title="隐藏导航栏">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+            </svg>
+        </button>
+
+        <!-- URL 输入框 -->
+        <input type="url" class="url-input" id="url-input" placeholder="请输入要翻译的网页 URL...">
+
+        <!-- 翻译按钮 -->
+        <button class="translate-btn" id="translate-btn">翻译</button>
+
+        <!-- 模式切换 -->
+        <div class="mode-toggle">
+            <button class="mode-btn active" data-mode="translated">译文</button>
+            <button class="mode-btn" data-mode="original">原文</button>
+            <button class="mode-btn" data-mode="bilingual">双语</button>
+        </div>
+    </nav>
+
+    <!-- 悬浮显示按钮 -->
+    <button class="floating-toggle" id="floating-toggle" title="显示导航栏">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        </svg>
+    </button>
+
+    <!-- 主内容区域 -->
+    <main class="main-content" id="main-content">
+        <!-- 加载状态 -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在处理网页，请稍候...</p>
+        </div>
+
+        <!-- 内容预览区域 -->
+        <div class="content-viewer">
+            <!-- 空状态 -->
+            <div class="empty-state" id="empty-state">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                </svg>
+                <h3>输入网页 URL 开始翻译</h3>
+                <p>支持自动检测语言并翻译为中文</p>
+            </div>
+
+            <!-- 译文 iframe -->
+            <iframe id="translated-frame" class="content-frame"></iframe>
+
+            <!-- 原文 iframe -->
+            <iframe id="original-frame" class="content-frame"></iframe>
+
+            <!-- 双语对照 -->
+            <div class="bilingual-container" id="bilingual-container">
+                <!-- 双语模式标签 -->
+                <div class="bilingual-labels">
+                    <div class="bilingual-label">译文</div>
+                    <div class="bilingual-label">原文</div>
+                </div>
+                
+                <!-- 同步状态指示器 -->
+                <div class="sync-indicator" id="sync-indicator">
+                    <div class="sync-dot"></div>
+                    <span id="sync-status">同步滚动已启用</span>
+                </div>
+                
+                <iframe id="bilingual-translated" class="bilingual-pane"></iframe>
+                <iframe id="bilingual-original" class="bilingual-pane"></iframe>
+            </div>
+        </div>
+    </main>
+
+    <!-- 错误提示 -->
+    <div class="error-toast" id="error-toast"></div>
+
+    <!-- JavaScript -->
+    <script src="assets/js/monolith-translator.js"></script>
+</body>
+</html>

@@ -7,7 +7,10 @@ use crate::html::get_node_attr;
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 
 #[cfg(feature = "translation")]
-use markdown_translator::{TranslationConfig, TranslationService};
+use markdown_translator::{TranslationConfig, TranslationService, TranslationLibConfig};
+
+#[cfg(feature = "translation")]
+use std::path::Path;
 
 /// 存储需要翻译的文本及其位置信息
 #[cfg(feature = "translation")]
@@ -17,13 +20,13 @@ struct TextToTranslate {
     attr_name: Option<String>, // 如果是属性，存储属性名
 }
 
-/// 翻译DOM内容 - 高性能批量翻译
+/// 翻译DOM内容 - 高性能批量翻译（支持配置文件）
 ///
 /// # 参数
 ///
 /// * `dom` - 要翻译的DOM树
 /// * `target_lang` - 目标语言代码（如 "zh-CN", "en", "ja" 等）
-/// * `api_url` - 翻译API地址（可选，默认使用本地DeepLX）
+/// * `api_url` - 翻译API地址（可选，优先使用配置文件）
 ///
 /// # 返回
 ///
@@ -35,16 +38,8 @@ pub async fn translate_dom_content(
     target_lang: &str,
     api_url: Option<&str>,
 ) -> Result<RcDom, MonolithError> {
-    // 配置翻译服务 - 高性能参数
-    let config = TranslationConfig {
-        enabled: true,
-        source_lang: "auto".to_string(),
-        target_lang: target_lang.to_string(),
-        deeplx_api_url: api_url.unwrap_or("https://deepl3.fileaiwork.online/dptrans?token=ej0ab47388ed86e843de9f499e52e6e664ae1m491cad7bf1.bIrYaAAAAAA=.b9c326068ac3c37ff36b8fea77867db51ddf235150945d7ad43472d68581e6c4pd14&newllm=1").to_string(),
-        max_requests_per_second: 5.0, // 提高请求频率
-        max_text_length: 10000, // 增加单次翻译长度
-        max_paragraphs_per_request: 100, // 更大批次处理
-    };
+    // 加载配置文件或使用默认值
+    let config = load_translation_config(target_lang, api_url);
 
     // 创建翻译服务
     let translator = TranslationService::new(config);
@@ -181,6 +176,87 @@ async fn batch_translate_texts_optimized(
     }
 
     Ok(())
+}
+
+/// 加载翻译配置，支持配置文件和参数覆盖
+#[cfg(feature = "translation")]
+pub fn load_translation_config(target_lang: &str, api_url: Option<&str>) -> TranslationConfig {
+    // 尝试从配置文件加载
+    let lib_config = load_config_from_files();
+    let mut config = lib_config.translation;
+    
+    // 命令行参数覆盖配置文件
+    config.target_lang = target_lang.to_string();
+    config.enabled = true; // 当调用翻译时显式启用
+    
+    if let Some(url) = api_url {
+        config.deeplx_api_url = url.to_string();
+    }
+    
+    // 如果配置文件不存在，使用优化的默认参数
+    if !Path::new("translation-config.toml").exists() && 
+       !Path::new("config.toml").exists() &&
+       !Path::new(".translation-config.toml").exists() {
+        println!("未找到配置文件，使用优化默认参数");
+        config.max_requests_per_second = 5.0;
+        config.max_text_length = 10000;
+        config.max_paragraphs_per_request = 100;
+        
+        // 如果没有指定 API URL，使用默认值
+        if api_url.is_none() {
+            config.deeplx_api_url = "http://localhost:1188/translate".to_string();
+        }
+    }
+    
+    config
+}
+
+/// 从多个可能的位置加载配置文件
+#[cfg(feature = "translation")]
+fn load_config_from_files() -> TranslationLibConfig {
+    let possible_paths = [
+        "translation-config.toml",
+        "config.toml", 
+        ".translation-config.toml",
+        "~/.config/monolith/translation.toml",
+        "/etc/monolith/translation.toml",
+    ];
+    
+    for path in &possible_paths {
+        if Path::new(path).exists() {
+            match TranslationLibConfig::from_file(path) {
+                Ok(config) => {
+                    println!("从 {} 加载配置文件", path);
+                    return config;
+                }
+                Err(e) => {
+                    eprintln!("警告: 无法从 {} 加载配置: {}", path, e);
+                }
+            }
+        }
+    }
+    
+    TranslationLibConfig::default()
+}
+
+/// 生成示例配置文件
+#[cfg(feature = "translation")]
+pub fn generate_example_config() -> Result<(), MonolithError> {
+    let config_path = "translation-config.toml";
+    
+    if Path::new(config_path).exists() {
+        println!("配置文件 {} 已存在，跳过生成", config_path);
+        return Ok(());
+    }
+    
+    match TranslationLibConfig::generate_example_config(config_path) {
+        Ok(_) => {
+            println!("已生成示例配置文件: {}", config_path);
+            println!("请编辑该文件以配置翻译参数");
+            Ok(())
+        }
+        Err(e) => Err(MonolithError::new(&format!("生成配置文件失败: {}", e)))
+    }
 }
 
 /// 优化的批次处理函数

@@ -8,3 +8,9 @@ pub mod session;
 pub mod url;
 #[cfg(feature = "translation")]
 pub mod translation;
+#[cfg(feature = "web")]
+pub mod web;
+#[cfg(feature = "web")]
+pub mod redis_cache;
+#[cfg(feature = "web")]
+pub mod html_builder;

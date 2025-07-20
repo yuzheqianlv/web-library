@@ -132,11 +132,16 @@ struct Cli {
 
     /// Translation API URL
     #[cfg(feature = "translation")]
-    #[arg(long, value_name = "https://deepl3.fileaiwork.online/dptrans?token=...")]
+    #[arg(long, value_name = "http://localhost:1188/translate")]
     translation_api: Option<String>,
 
+    /// Generate example translation configuration file
+    #[cfg(feature = "translation")]
+    #[arg(long)]
+    generate_config: bool,
+
     /// URL or file path, use - for STDIN
-    target: String,
+    target: Option<String>,
 }
 
 pub enum Output {
@@ -224,6 +229,24 @@ fn main() {
         // Translation options
         #[cfg(feature = "translation")]
         {
+            // 处理配置文件生成请求
+            if cli.generate_config {
+                use monolith::translation::generate_example_config;
+                match generate_example_config() {
+                    Ok(_) => process::exit(0),
+                    Err(e) => {
+                        eprintln!("Error generating config: {}", e);
+                        process::exit(1);
+                    }
+                }
+            }
+            
+            // 如果没有指定target且不是生成配置，则报错
+            if cli.target.is_none() && !cli.generate_config {
+                eprintln!("Error: TARGET is required unless using --generate-config");
+                process::exit(1);
+            }
+            
             options.enable_translation = cli.translate;
             options.target_language = cli.target_lang;
             options.translation_api_url = cli.translation_api;
@@ -291,7 +314,8 @@ fn main() {
     let session: Session = Session::new(cache, cookies, options);
 
     // Retrieve target from source and output result
-    if cli.target == "-" {
+    let target = cli.target.as_ref().unwrap(); // 安全，因为上面已经检查过
+    if target == "-" {
         // Read input from pipe (STDIN)
         let data: Vec<u8> = read_stdin();
 
@@ -317,7 +341,7 @@ fn main() {
             }
         }
     } else {
-        match create_monolithic_document(session, cli.target) {
+        match create_monolithic_document(session, target.clone()) {
             Ok((result, title)) => {
                 // Define output
                 let mut output = Output::new(

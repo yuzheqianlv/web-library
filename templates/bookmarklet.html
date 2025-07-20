@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monolith 书签脚本生成器</title>
+    <link rel="stylesheet" href="assets/css/main.css">
+    <style>
+        .bookmarklet-page {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+        }
+        
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid #e1e5e9;
+        }
+        
+        .page-title {
+            font-size: 2.5rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+        
+        .page-subtitle {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+        
+        .section {
+            margin-bottom: 3rem;
+            padding: 2rem;
+            border: 1px solid #e1e5e9;
+            border-radius: 12px;
+            background: #fafbfc;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            color: #333;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .bookmarklet-code {
+            background: #f8f9fa;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            word-break: break-all;
+            line-height: 1.4;
+            position: relative;
+        }
+        
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background-color 0.3s ease;
+        }
+        
+        .copy-btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .copy-btn.copied {
+            background: #28a745;
+        }
+        
+        .installation-steps {
+            counter-reset: step;
+        }
+        
+        .installation-step {
+            counter-increment: step;
+            position: relative;
+            padding: 1rem 1rem 1rem 3rem;
+            margin-bottom: 1rem;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .installation-step::before {
+            content: counter(step);
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .browser-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .browser-tab {
+            padding: 0.5rem 1rem;
+            background: #e9ecef;
+            border: none;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .browser-tab.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .browser-content {
+            display: none;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0 8px 8px 8px;
+            border: 1px solid #e1e5e9;
+        }
+        
+        .browser-content.active {
+            display: block;
+        }
+        
+        .demo-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        
+        .demo-section .section-title {
+            color: white;
+            border-bottom-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .demo-button {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
+            margin: 1rem 0;
+        }
+        
+        .demo-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 0.75rem 1.5rem;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .back-link:hover {
+            background: #5a6fd8;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="bookmarklet-page">
+        <header class="page-header">
+            <h1 class="page-title">📚 Monolith 书签脚本</h1>
+            <p class="page-subtitle">一键翻译任意网页，无需复制粘贴 URL</p>
+        </header>
+
+        <!-- 书签脚本代码 -->
+        <section class="section">
+            <h2 class="section-title">🔗 书签脚本代码</h2>
+            <p>将下方代码复制并保存为浏览器书签，即可在任意网页上一键开始翻译：</p>
+            <div class="bookmarklet-code" id="bookmarklet-code">
+                <button class="copy-btn" onclick="copyBookmarklet()">复制</button>
+                <div id="bookmarklet-text">正在加载书签脚本...</div>
+            </div>
+        </section>
+
+        <!-- 安装指南 -->
+        <section class="section">
+            <h2 class="section-title">⚙️ 安装指南</h2>
+            
+            <div class="browser-tabs">
+                <button class="browser-tab active" onclick="switchBrowser('chrome')">Chrome/Edge</button>
+                <button class="browser-tab" onclick="switchBrowser('firefox')">Firefox</button>
+                <button class="browser-tab" onclick="switchBrowser('safari')">Safari</button>
+            </div>
+            
+            <div id="chrome-content" class="browser-content active">
+                <div class="installation-steps">
+                    <div class="installation-step">
+                        <strong>显示书签栏：</strong> 按 Ctrl+Shift+B (Windows) 或 Cmd+Shift+B (Mac)
+                    </div>
+                    <div class="installation-step">
+                        <strong>添加书签：</strong> 右键点击书签栏空白处，选择"添加页面"
+                    </div>
+                    <div class="installation-step">
+                        <strong>填写信息：</strong> 名称填写"翻译当前页面"，网址粘贴上方的书签脚本代码
+                    </div>
+                    <div class="installation-step">
+                        <strong>保存完成：</strong> 点击保存，书签脚本安装完成
+                    </div>
+                </div>
+            </div>
+            
+            <div id="firefox-content" class="browser-content">
+                <div class="installation-steps">
+                    <div class="installation-step">
+                        <strong>显示书签栏：</strong> 按 Ctrl+Shift+B (Windows) 或 Cmd+Shift+B (Mac)
+                    </div>
+                    <div class="installation-step">
+                        <strong>添加书签：</strong> 右键点击书签栏空白处，选择"新书签"
+                    </div>
+                    <div class="installation-step">
+                        <strong>填写信息：</strong> 名称填写"翻译当前页面"，位置粘贴上方的书签脚本代码
+                    </div>
+                    <div class="installation-step">
+                        <strong>保存完成：</strong> 点击添加，书签脚本安装完成
+                    </div>
+                </div>
+            </div>
+            
+            <div id="safari-content" class="browser-content">
+                <div class="installation-steps">
+                    <div class="installation-step">
+                        <strong>显示书签栏：</strong> 在"查看"菜单中选择"显示收藏夹栏"
+                    </div>
+                    <div class="installation-step">
+                        <strong>添加临时书签：</strong> 将当前页面添加到书签栏
+                    </div>
+                    <div class="installation-step">
+                        <strong>编辑书签：</strong> 右键点击新书签，选择"编辑地址"
+                    </div>
+                    <div class="installation-step">
+                        <strong>替换地址：</strong> 将地址替换为上方的书签脚本代码，改名为"翻译当前页面"
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 使用说明 -->
+        <section class="section">
+            <h2 class="section-title">🚀 使用方法</h2>
+            <div class="installation-steps">
+                <div class="installation-step">
+                    <strong>浏览网页：</strong> 在任意你想要翻译的网页上
+                </div>
+                <div class="installation-step">
+                    <strong>点击书签：</strong> 点击书签栏中的"翻译当前页面"书签
+                </div>
+                <div class="installation-step">
+                    <strong>自动翻译：</strong> 系统会在新标签页中自动加载并翻译当前页面
+                </div>
+                <div class="installation-step">
+                    <strong>查看结果：</strong> 支持原文/译文/双语对照三种显示模式
+                </div>
+            </div>
+        </section>
+
+        <!-- 演示区域 -->
+        <section class="section demo-section">
+            <h2 class="section-title">🎯 在线演示</h2>
+            <p>想要体验书签脚本的效果？试试下面的演示链接：</p>
+            <a href="/website/https://www.example.com" class="demo-button" target="_blank">
+                📖 演示翻译 Example.com
+            </a>
+            <a href="/website/https://news.ycombinator.com" class="demo-button" target="_blank">
+                📰 演示翻译 Hacker News
+            </a>
+            <p style="margin-top: 1rem; opacity: 0.9;">
+                <small>点击上方链接可以体验通过 URL 直接访问翻译功能的效果</small>
+            </p>
+        </section>
+
+        <a href="/" class="back-link">← 返回翻译首页</a>
+    </div>
+
+    <script>
+        // 浏览器标签切换
+        function switchBrowser(browser) {
+            // 隐藏所有内容
+            document.querySelectorAll('.browser-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.browser-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 显示选中的内容
+            document.getElementById(browser + '-content').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // 复制书签脚本代码
+        function copyBookmarklet() {
+            const bookmarkletText = document.getElementById('bookmarklet-text').textContent;
+            const copyBtn = document.querySelector('.copy-btn');
+            
+            navigator.clipboard.writeText(bookmarkletText).then(() => {
+                copyBtn.textContent = '已复制';
+                copyBtn.classList.add('copied');
+                
+                setTimeout(() => {
+                    copyBtn.textContent = '复制';
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+            }).catch(() => {
+                // 备用复制方法
+                const textArea = document.createElement('textarea');
+                textArea.value = bookmarkletText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                copyBtn.textContent = '已复制';
+                copyBtn.classList.add('copied');
+                
+                setTimeout(() => {
+                    copyBtn.textContent = '复制';
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // 页面加载时获取书签脚本代码
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const response = await fetch('/api/bookmarklet');
+                const data = await response.json();
+                
+                document.getElementById('bookmarklet-text').textContent = data.bookmarklet_code;
+            } catch (error) {
+                console.error('获取书签脚本失败:', error);
+                document.getElementById('bookmarklet-text').textContent = '获取书签脚本失败，请刷新页面重试';
+            }
+        });
+    </script>
+</body>
+</html>
