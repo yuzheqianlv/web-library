@@ -23,7 +23,7 @@ pub struct MonolithError {
 }
 
 impl MonolithError {
-    fn new(msg: &str) -> MonolithError {
+    pub fn new(msg: &str) -> MonolithError {
         MonolithError {
             details: msg.to_string(),
         }
@@ -74,6 +74,13 @@ pub struct MonolithOptions {
     pub timeout: u64,
     pub unwrap_noscript: bool,
     pub user_agent: Option<String>,
+    // Translation options
+    #[cfg(feature = "translation")]
+    pub enable_translation: bool,
+    #[cfg(feature = "translation")]
+    pub target_language: Option<String>,
+    #[cfg(feature = "translation")]
+    pub translation_api_url: Option<String>,
 }
 
 const ANSI_COLOR_RED: &str = "\x1b[31m";
@@ -201,6 +208,24 @@ pub fn create_monolithic_document_from_data(
 
     // Traverse through the document and embed remote assets
     walk(&mut session, &base_url, &dom.document);
+
+    // Translation processing (if enabled)
+    #[cfg(feature = "translation")]
+    {
+        if session.options.enable_translation {
+            use crate::translation::translate_dom_content_sync;
+            
+            dom = translate_dom_content_sync(
+                dom, 
+                session.options.target_language.as_deref().unwrap_or("zh"),
+                session.options.translation_api_url.as_deref()
+            )?;
+            
+            if !session.options.silent {
+                println!("Translation completed");
+            }
+        }
+    }
 
     // Update or add new BASE element to reroute network requests and hash-links
     if let Some(new_base_url) = session.options.base_url.clone() {

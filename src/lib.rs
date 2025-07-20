@@ -6,3 +6,5 @@ pub mod html;
 pub mod js;
 pub mod session;
 pub mod url;
+#[cfg(feature = "translation")]
+pub mod translation;

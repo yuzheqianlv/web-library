@@ -120,6 +120,21 @@ struct Cli {
     #[arg(short = 'v', long)]
     no_video: bool,
 
+    /// Enable translation of page content
+    #[cfg(feature = "translation")]
+    #[arg(short = 'T', long)]
+    translate: bool,
+
+    /// Target language for translation (e.g., zh, en, ja, fr)
+    #[cfg(feature = "translation")]
+    #[arg(long, value_name = "zh")]
+    target_lang: Option<String>,
+
+    /// Translation API URL
+    #[cfg(feature = "translation")]
+    #[arg(long, value_name = "https://deepl3.fileaiwork.online/dptrans?token=...")]
+    translation_api: Option<String>,
+
     /// URL or file path, use - for STDIN
     target: String,
 }
@@ -204,6 +219,14 @@ fn main() {
             options.user_agent = Some(DEFAULT_USER_AGENT.to_string());
         } else {
             options.user_agent = cli.user_agent;
+        }
+
+        // Translation options
+        #[cfg(feature = "translation")]
+        {
+            options.enable_translation = cli.translate;
+            options.target_language = cli.target_lang;
+            options.translation_api_url = cli.translation_api;
         }
 
         cookie_file_path = cli.cookie_file;
