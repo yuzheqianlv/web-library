@@ -1,0 +1,135 @@
+# Docker Makefile for Monolith
+
+.PHONY: help build dev prod start stop restart logs status clean
+
+# Default target
+help:
+	@echo "Monolith Docker Commands:"
+	@echo ""
+	@echo "Development:"
+	@echo "  make dev           - Start development environment"
+	@echo "  make build         - Build Docker images"
+	@echo "  make start         - Start services"
+	@echo "  make stop          - Stop services"
+	@echo "  make restart       - Restart services"
+	@echo ""
+	@echo "Production:"
+	@echo "  make prod          - Start production environment"
+	@echo "  make prod-stop     - Stop production environment"
+	@echo "  make prod-restart  - Restart production environment"
+	@echo ""
+	@echo "Monitoring:"
+	@echo "  make logs          - Show logs"
+	@echo "  make status        - Show service status"
+	@echo "  make ps            - Show running containers"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  make clean         - Clean up containers and volumes"
+	@echo "  make rebuild       - Rebuild and restart"
+	@echo "  make backup        - Backup Redis data"
+	@echo "  make restore       - Restore Redis data"
+
+# Development environment
+dev: build
+	@echo "🚀 Starting development environment..."
+	@mkdir -p data logs
+	@docker-compose up -d
+	@echo "✅ Development environment started"
+	@echo "🌐 Web: http://localhost:7080"
+	@echo "📚 Library: http://localhost:7080/library"
+
+# Production environment
+prod: build
+	@echo "🚀 Starting production environment..."
+	@mkdir -p data logs config/ssl
+	@docker-compose -f docker-compose.prod.yml up -d
+	@echo "✅ Production environment started"
+
+# Build images
+build:
+	@echo "🔨 Building Docker images..."
+	@docker-compose build
+
+# Start services
+start:
+	@docker-compose up -d
+
+# Stop services
+stop:
+	@docker-compose down
+
+# Restart services
+restart: stop start
+
+# Production operations
+prod-stop:
+	@docker-compose -f docker-compose.prod.yml down
+
+prod-restart: prod-stop prod
+
+# Show logs
+logs:
+	@docker-compose logs -f
+
+# Show logs for specific service
+logs-%:
+	@docker-compose logs -f $*
+
+# Show service status
+status:
+	@docker-compose ps
+	@echo ""
+	@docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+
+# Show running containers
+ps:
+	@docker-compose ps
+
+# Clean up
+clean:
+	@echo "🧹 Cleaning up..."
+	@docker-compose down -v
+	@docker system prune -f
+	@echo "✅ Cleanup completed"
+
+# Rebuild everything
+rebuild: clean build dev
+
+# Backup Redis data
+backup:
+	@echo "💾 Creating Redis backup..."
+	@mkdir -p backups
+	@docker-compose exec redis redis-cli --rdb /data/backup-$(shell date +%Y%m%d-%H%M%S).rdb
+	@docker cp $$(docker-compose ps -q redis):/data/backup-*.rdb ./backups/
+	@echo "✅ Backup created in ./backups/"
+
+# Restore Redis data (requires BACKUP_FILE variable)
+restore:
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Please specify BACKUP_FILE=path/to/backup.rdb"; \
+		exit 1; \
+	fi
+	@echo "🔄 Restoring Redis data from $(BACKUP_FILE)..."
+	@docker cp $(BACKUP_FILE) $$(docker-compose ps -q redis):/data/dump.rdb
+	@docker-compose restart redis
+	@echo "✅ Restore completed"
+
+# Show Redis info
+redis-info:
+	@docker-compose exec redis redis-cli info
+
+# Redis CLI
+redis-cli:
+	@docker-compose exec redis redis-cli
+
+# Enter container shell
+shell-%:
+	@docker-compose exec $* /bin/sh
+
+# View container logs in real-time
+tail-%:
+	@docker-compose logs -f --tail=100 $*
+
+# Development quick start
+quick:
+	@./start.sh

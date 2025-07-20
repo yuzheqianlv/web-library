@@ -52,7 +52,7 @@ impl Default for RedisCacheConfig {
     fn default() -> Self {
         Self {
             url: "redis://redis.markdown-library.orb.local:6379".to_string(),
-            default_ttl: 3600 * 24, // 24小时
+            default_ttl: 0, // 0表示永久缓存，手动清除
             key_prefix: "monolith:translation:".to_string(),
         }
     }
@@ -110,19 +110,35 @@ impl RedisCache {
         let serialized = serde_json::to_string(translation)
             .map_err(|e| RedisError::from((redis::ErrorKind::TypeError, "Serialization failed", e.to_string())))?;
 
-        let ttl = translation.expires_at.saturating_sub(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-        );
-
-        if ttl > 0 {
-            let _: () = redis::cmd("SETEX")
+        // 检查是否使用永久缓存（TTL为0）或有指定过期时间
+        if self.config.default_ttl == 0 || translation.expires_at == 0 {
+            // 永久存储，不设置过期时间
+            let _: () = redis::cmd("SET")
                 .arg(&key)
-                .arg(ttl)
                 .arg(&serialized)
                 .query(&mut conn)?;
+        } else {
+            // 计算剩余TTL时间
+            let ttl = translation.expires_at.saturating_sub(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+            );
+
+            if ttl > 0 {
+                let _: () = redis::cmd("SETEX")
+                    .arg(&key)
+                    .arg(ttl)
+                    .arg(&serialized)
+                    .query(&mut conn)?;
+            } else {
+                // TTL已过期，使用永久存储
+                let _: () = redis::cmd("SET")
+                    .arg(&key)
+                    .arg(&serialized)
+                    .query(&mut conn)?;
+            }
         }
 
         Ok(())
@@ -139,17 +155,23 @@ impl RedisCache {
             Some(data) => {
                 match serde_json::from_str::<CachedTranslation>(&data) {
                     Ok(translation) => {
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs();
-
-                        if translation.expires_at > now {
+                        // 永久缓存模式：不检查过期时间，直接返回
+                        if self.config.default_ttl == 0 || translation.expires_at == 0 {
                             Ok(Some(translation))
                         } else {
-                            // 过期，删除缓存
-                            let _: () = redis::cmd("DEL").arg(&key).query(&mut conn)?;
-                            Ok(None)
+                            // 仍然支持有TTL的缓存（向后兼容）
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs();
+
+                            if translation.expires_at > now {
+                                Ok(Some(translation))
+                            } else {
+                                // 过期，删除缓存
+                                let _: () = redis::cmd("DEL").arg(&key).query(&mut conn)?;
+                                Ok(None)
+                            }
                         }
                     }
                     Err(_) => {
@@ -197,7 +219,7 @@ impl RedisCache {
         let keys: Vec<String> = redis::cmd("KEYS").arg(&pattern).query(&mut conn)?;
         
         let mut total_size_bytes = 0;
-        let mut expired_keys = 0;
+        let mut expired_keys = 0; // 在永久缓存模式下，这表示有明确过期时间且已过期的旧缓存
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -212,10 +234,11 @@ impl RedisCache {
                 .unwrap_or(0);
             total_size_bytes += size;
 
-            // 检查是否过期
+            // 只计算有明确过期时间且已过期的缓存
             if let Ok(Some(data)) = redis::cmd("GET").arg(key).query::<Option<String>>(&mut conn) {
                 if let Ok(translation) = serde_json::from_str::<CachedTranslation>(&data) {
-                    if translation.expires_at <= now {
+                    // 只有明确设置了过期时间（非0）且已过期的才被计为expired
+                    if translation.expires_at > 0 && translation.expires_at <= now {
                         expired_keys += 1;
                     }
                 }
@@ -225,13 +248,13 @@ impl RedisCache {
         Ok(CacheStats {
             total_keys: keys.len(),
             total_size_bytes,
-            expired_keys,
+            expired_keys, // 现在表示需要清理的旧缓存数量
             hit_count: 0, // TODO: 实现计数器
             miss_count: 0, // TODO: 实现计数器
         })
     }
 
-    /// 清理过期的缓存条目
+    /// 清理过期的缓存条目（永久缓存模式下此方法主要用于清理损坏的数据）
     pub fn cleanup_expired(&self) -> RedisResult<u32> {
         let mut conn = self.client.get_connection()?;
         let pattern = format!("{}*", self.config.key_prefix);
@@ -239,15 +262,27 @@ impl RedisCache {
         let keys: Vec<String> = redis::cmd("KEYS").arg(&pattern).query(&mut conn)?;
         let mut deleted_count = 0;
         
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
+        // 在永久缓存模式下，只清理损坏的数据或明确过期的旧缓存
         for key in keys {
             if let Ok(Some(data)) = redis::cmd("GET").arg(&key).query::<Option<String>>(&mut conn) {
-                if let Ok(translation) = serde_json::from_str::<CachedTranslation>(&data) {
-                    if translation.expires_at <= now {
+                match serde_json::from_str::<CachedTranslation>(&data) {
+                    Ok(translation) => {
+                        // 只删除明确设置了过期时间且已过期的旧缓存（向后兼容）
+                        if translation.expires_at > 0 {
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs();
+                            
+                            if translation.expires_at <= now {
+                                let _: u32 = redis::cmd("DEL").arg(&key).query(&mut conn)?;
+                                deleted_count += 1;
+                            }
+                        }
+                        // expires_at == 0 的缓存被视为永久缓存，不删除
+                    }
+                    Err(_) => {
+                        // 清理损坏的缓存数据
                         let _: u32 = redis::cmd("DEL").arg(&key).query(&mut conn)?;
                         deleted_count += 1;
                     }
@@ -255,6 +290,85 @@ impl RedisCache {
             }
         }
 
+        Ok(deleted_count)
+    }
+
+    /// 按域名获取缓存数据
+    pub fn get_by_domain(&self, domain: &str) -> RedisResult<Vec<CachedTranslation>> {
+        let mut conn = self.client.get_connection()?;
+        let pattern = format!("{}*", self.config.key_prefix);
+        
+        let keys: Vec<String> = redis::cmd("KEYS").arg(&pattern).query(&mut conn)?;
+        let mut domain_translations = Vec::new();
+        
+        for key in keys {
+            if let Ok(Some(data)) = redis::cmd("GET").arg(&key).query::<Option<String>>(&mut conn) {
+                if let Ok(translation) = serde_json::from_str::<CachedTranslation>(&data) {
+                    if let Ok(url) = url::Url::parse(&translation.url) {
+                        if let Some(host) = url.host_str() {
+                            if host == domain || host.ends_with(&format!(".{}", domain)) {
+                                domain_translations.push(translation);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(domain_translations)
+    }
+
+    /// 获取所有域名的统计信息
+    pub fn get_domains_stats(&self) -> RedisResult<std::collections::HashMap<String, (usize, usize, u64)>> {
+        let mut conn = self.client.get_connection()?;
+        let pattern = format!("{}*", self.config.key_prefix);
+        
+        let keys: Vec<String> = redis::cmd("KEYS").arg(&pattern).query(&mut conn)?;
+        let mut domain_stats: std::collections::HashMap<String, (usize, usize, u64)> = std::collections::HashMap::new();
+        
+        for key in keys {
+            if let Ok(Some(data)) = redis::cmd("GET").arg(&key).query::<Option<String>>(&mut conn) {
+                if let Ok(translation) = serde_json::from_str::<CachedTranslation>(&data) {
+                    if let Ok(url) = url::Url::parse(&translation.url) {
+                        if let Some(host) = url.host_str() {
+                            let domain = host.to_string();
+                            
+                            // 获取键的大小
+                            let size: usize = redis::cmd("MEMORY")
+                                .arg("USAGE")
+                                .arg(&key)
+                                .query(&mut conn)
+                                .unwrap_or(0);
+                            
+                            let entry = domain_stats.entry(domain).or_insert((0, 0, 0));
+                            entry.0 += 1; // 计数增加
+                            entry.1 += size; // 大小增加
+                            entry.2 = entry.2.max(translation.created_at); // 最新更新时间
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(domain_stats)
+    }
+
+    /// 删除特定域名的所有缓存
+    pub fn delete_domain(&self, domain: &str) -> RedisResult<u32> {
+        let translations = self.get_by_domain(domain)?;
+        let mut conn = self.client.get_connection()?;
+        let mut deleted_count = 0;
+        
+        for translation in translations {
+            let key = self.generate_cache_key(
+                &translation.url,
+                &translation.source_lang,
+                &translation.target_lang,
+            );
+            let deleted: u32 = redis::cmd("DEL").arg(&key).query(&mut conn)?;
+            deleted_count += deleted;
+        }
+        
         Ok(deleted_count)
     }
 }
@@ -275,7 +389,9 @@ pub fn create_cached_translation(
         .unwrap_or_default()
         .as_secs();
     
-    let ttl = ttl_seconds.unwrap_or(3600 * 24); // 默认24小时
+    // 默认使用永久缓存（TTL为0表示永不过期）
+    let ttl = ttl_seconds.unwrap_or(0);
+    let expires_at = if ttl == 0 { 0 } else { now + ttl };
     
     CachedTranslation {
         id: Uuid::new_v4().to_string(),
@@ -286,7 +402,7 @@ pub fn create_cached_translation(
         source_lang,
         target_lang,
         created_at: now,
-        expires_at: now + ttl,
+        expires_at,
     }
 }
 

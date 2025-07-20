@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Redis cache service (production configuration)
+  redis:
+    image: redis:7-alpine
+    container_name: monolith-redis-prod
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"  # Only bind to localhost in production
+    volumes:
+      - redis_data_prod:/data
+      - ./config/redis.prod.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - monolith-prod-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Monolith web application (production)
+  monolith-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: monolith-web-prod
+    restart: always
+    ports:
+      - "127.0.0.1:7080:7080"  # Only bind to localhost, use reverse proxy
+    environment:
+      - RUST_LOG=warn
+      - BIND_ADDR=0.0.0.0
+      - PORT=7080
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./config/translation-config.prod.toml:/app/translation-config.toml:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - monolith-prod-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Nginx reverse proxy (production)
+  nginx:
+    image: nginx:alpine
+    container_name: monolith-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - monolith-web
+    networks:
+      - monolith-prod-network
+
+volumes:
+  redis_data_prod:
+    driver: local
+
+networks:
+  monolith-prod-network:
+    driver: bridge

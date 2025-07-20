@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # Redis cache service
+  redis:
+    image: redis:7-alpine
+    container_name: monolith-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - monolith-network
+
+  # Monolith web application
+  monolith-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: monolith-web
+    restart: unless-stopped
+    ports:
+      - "7080:7080"
+    environment:
+      - RUST_LOG=info
+      - BIND_ADDR=0.0.0.0
+      - PORT=7080
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./translation-config.toml:/app/translation-config.toml:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - monolith-network
+
+  # Optional: Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: monolith-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+      - HTTP_USER=admin
+      - HTTP_PASSWORD=secret
+    depends_on:
+      - redis
+    networks:
+      - monolith-network
+    profiles:
+      - debug
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  monolith-network:
+    driver: bridge
