@@ -49,6 +49,20 @@ tower-http = { version = "0.5", features = ["fs", "cors"], optional = true } # H
 # Redis dependencies
 redis = { version = "0.24", optional = true } # Redis client
 uuid = { version = "1.0", features = ["v4"], optional = true } # UUID generation
+# Translation system dependencies
+tracing = { version = "0.1", optional = true } # Logging and monitoring
+tracing-subscriber = { version = "0.3", optional = true } # Logging subscriber
+thiserror = { version = "1.0", optional = true } # Error handling
+blake3 = { version = "1.0", optional = true } # Hashing for cache keys
+toml = { version = "0.8", optional = true } # Configuration file parsing
+config = { version = "0.14", optional = true } # Enhanced configuration management
+shellexpand = { version = "3.1", optional = true } # Shell expansion for paths
+lru = { version = "0.12", optional = true } # LRU cache implementation
+dashmap = { version = "5.5", optional = true } # Concurrent HashMap
+rayon = { version = "1.8", optional = true } # Data parallelism library
+tower = { version = "0.4", optional = true } # Service trait and utilities
+metrics = { version = "0.22", optional = true } # Metrics collection framework
+dotenv = { version = "0.15", optional = true } # .env file support
 
 # Used for unwrapping NOSCRIPT
 [dependencies.regex]
@@ -78,6 +92,18 @@ translation = [
     "serde",
     "serde_json", 
     "tokio",
+    "tracing",
+    "thiserror",
+    "blake3",
+    "toml",
+    "config",
+    "shellexpand",
+    "lru",
+    "dashmap",
+    "rayon",
+    "tower",
+    "metrics",
+    "dotenv",
 ] # Enable translation functionality
 web = [
     "axum",
@@ -87,6 +113,8 @@ web = [
     "serde_json",
     "redis",
     "uuid",
+    "tracing",
+    "tracing-subscriber",
 ] # Enable web server functionality
 vendored-openssl = [
     "openssl/vendored",

@@ -1,14 +1,12 @@
 //! 页面处理器
 
-use std::sync::Arc;
-
 #[cfg(feature = "web")]
 use axum::{
     extract::Path,
     response::Html,
 };
 
-use crate::web::{templates, types::AppState};
+use crate::web::templates;
 
 /// 主页处理器
 #[cfg(feature = "web")]

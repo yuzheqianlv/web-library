@@ -8,6 +8,20 @@ use monolith::web::{WebConfig, WebServer};
 #[cfg(feature = "web")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 初始化日志
+    tracing_subscriber::fmt::init();
+    
+    // 初始化翻译配置系统（这会加载 .env 文件）
+    #[cfg(feature = "translation")]
+    {
+        use monolith::translation::config::ConfigManager;
+        if let Err(e) = ConfigManager::new() {
+            tracing::warn!("翻译配置初始化失败: {}", e);
+        } else {
+            tracing::info!("翻译配置系统初始化成功");
+        }
+    }
+    
     // 解析命令行参数
     let args: Vec<String> = std::env::args().collect();
 

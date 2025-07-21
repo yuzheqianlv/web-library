@@ -1,0 +1,757 @@
+//! 翻译功能模块
+//!
+//! 集成 markdown-translator 库，为 monolith 提供网页内容翻译功能。
+//! 
+//! 这个文件现在作为新翻译模块的兼容层，保持向后兼容性。
+
+// 导入新的模块化翻译系统
+mod translation;
+
+#[cfg(feature = "translation")]
+use markdown_translator::{TranslationConfig, TranslationLibConfig, TranslationService};
+
+#[cfg(feature = "translation")]
+use std::path::Path;
+
+/// 翻译配置常量
+#[cfg(feature = "translation")]
+mod constants {
+    pub const MAX_BATCH_SIZE: usize = 9000;
+    pub const DEFAULT_MIN_CHARS: usize = 2000;
+    pub const BATCH_DELAY_MS: u64 = 100;
+    pub const SMALL_BATCH_THRESHOLD: usize = 2;
+    pub const MIN_TEXT_LENGTH: usize = 2;
+    pub const MIN_TRANSLATION_LENGTH: usize = 3;
+    pub const CHINESE_CHAR_THRESHOLD: f32 = 0.5;
+    pub const SPECIAL_CHAR_THRESHOLD: f32 = 0.33;
+
+    pub const TRANSLATABLE_ATTRS: &[&str] = &[
+        "title",
+        "alt",
+        "placeholder",
+        "aria-label",
+        "aria-description",
+    ];
+
+    pub const SKIP_ELEMENTS: &[&str] = &[
+        "script", "style", "code", "pre", "noscript", "meta", "link", "head", "svg", "math",
+        "canvas", "video", "audio", "embed", "object", "iframe", "map", "area", "base", "br", "hr",
+        "img", "input", "source", "track", "wbr",
+    ];
+
+    pub const FUNCTIONAL_WORDS: &[&str] = &["ok", "yes", "no", "on", "off", "go", "up", "x", ">"];
+
+    pub const CONFIG_PATHS: &[&str] = &[
+        "translation-config.toml",
+        "config.toml",
+        ".translation-config.toml",
+        "~/.config/monolith/translation.toml",
+        "/etc/monolith/translation.toml",
+    ];
+}
+
+/// 存储需要翻译的文本及其位置信息
+#[cfg(feature = "translation")]
+#[derive(Debug, Clone)]
+struct TextItem {
+    text: String,
+    node: Handle,
+    attr_name: Option<String>,
+}
+
+#[cfg(feature = "translation")]
+impl TextItem {
+    fn new(text: String, node: Handle, attr_name: Option<String>) -> Self {
+        Self {
+            text,
+            node,
+            attr_name,
+        }
+    }
+
+    fn is_attribute(&self) -> bool {
+        self.attr_name.is_some()
+    }
+
+    fn char_count(&self) -> usize {
+        self.text.len()
+    }
+}
+
+/// 翻译批次管理器
+#[cfg(feature = "translation")]
+struct BatchManager {
+    max_batch_size: usize,
+    min_batch_chars: usize,
+}
+
+#[cfg(feature = "translation")]
+impl BatchManager {
+    fn new(min_chars: usize) -> Self {
+        Self {
+            max_batch_size: constants::MAX_BATCH_SIZE,
+            min_batch_chars: min_chars,
+        }
+    }
+
+    /// 将文本项组织成优化的批次
+    fn create_batches(&self, mut items: Vec<TextItem>) -> Vec<Vec<TextItem>> {
+        // 按文本长度排序，短文本优先
+        items.sort_by_key(|item| item.char_count());
+
+        let mut batches = Vec::new();
+        let mut current_batch = Vec::new();
+        let mut current_size = 0;
+
+        for item in items {
+            let item_size = item.char_count();
+
+            // 超大文本单独处理
+            if item_size > self.max_batch_size {
+                self.finalize_current_batch(&mut batches, &mut current_batch, current_size);
+                batches.push(vec![item]);
+                current_size = 0;
+                continue;
+            }
+
+            // 检查是否需要开始新批次
+            if self.should_start_new_batch(current_size, item_size, &current_batch) {
+                self.finalize_current_batch(&mut batches, &mut current_batch, current_size);
+                current_size = 0;
+            }
+
+            current_batch.push(item);
+            current_size += item_size + 1; // +1 for separator
+        }
+
+        // 处理最后一个批次
+        if !current_batch.is_empty() {
+            batches.push(current_batch);
+        }
+
+        batches
+    }
+
+    fn should_start_new_batch(
+        &self,
+        current_size: usize,
+        item_size: usize,
+        current_batch: &[TextItem],
+    ) -> bool {
+        !current_batch.is_empty()
+            && (current_size + item_size + 1 > self.max_batch_size)
+            && (current_size >= self.min_batch_chars || current_size > self.max_batch_size - 1000)
+    }
+
+    fn finalize_current_batch(
+        &self,
+        batches: &mut Vec<Vec<TextItem>>,
+        current_batch: &mut Vec<TextItem>,
+        current_size: usize,
+    ) {
+        if !current_batch.is_empty() {
+            if current_size < self.min_batch_chars {
+                println!(
+                    "批次字符数 {} 未达到最小要求 {}，但仍需处理",
+                    current_size, self.min_batch_chars
+                );
+            }
+            batches.push(std::mem::take(current_batch));
+        }
+    }
+}
+
+/// 文本过滤器
+#[cfg(feature = "translation")]
+struct TextFilter;
+
+#[cfg(feature = "translation")]
+impl TextFilter {
+    /// 判断文本是否需要翻译
+    fn should_translate(text: &str) -> bool {
+        let trimmed = text.trim();
+
+        if trimmed.len() < constants::MIN_TEXT_LENGTH {
+            return false;
+        }
+
+        if Self::is_non_translatable_content(trimmed) {
+            return false;
+        }
+
+        if !trimmed.chars().any(|c| c.is_alphabetic()) {
+            return false;
+        }
+
+        if Self::is_already_chinese(trimmed) {
+            return false;
+        }
+
+        if trimmed.len() < constants::MIN_TRANSLATION_LENGTH && Self::is_functional_text(trimmed) {
+            return false;
+        }
+
+        true
+    }
+
+    fn is_non_translatable_content(text: &str) -> bool {
+        // URL 检查
+        if text.starts_with("http://") || text.starts_with("https://") || text.starts_with("ftp://")
+        {
+            return true;
+        }
+
+        // 邮箱检查
+        if text.contains('@') && text.contains('.') && text.len() < 100 {
+            return true;
+        }
+
+        // 代码模式检查
+        let special_chars = text
+            .chars()
+            .filter(|&c| {
+                matches!(
+                    c,
+                    '{' | '}' | '[' | ']' | '(' | ')' | ';' | '=' | '<' | '>' | '/' | '\\'
+                )
+            })
+            .count();
+
+        if special_chars as f32 > text.len() as f32 * constants::SPECIAL_CHAR_THRESHOLD {
+            return true;
+        }
+
+        // CSS选择器或类名
+        if text.starts_with('.') || text.starts_with('#') || text.contains("::") {
+            return true;
+        }
+
+        // 纯数字或纯符号
+        text.chars()
+            .all(|c| c.is_numeric() || c.is_ascii_punctuation() || c.is_whitespace())
+    }
+
+    fn is_already_chinese(text: &str) -> bool {
+        let chinese_chars = text
+            .chars()
+            .filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c))
+            .count();
+
+        chinese_chars as f32 / text.chars().count() as f32 > constants::CHINESE_CHAR_THRESHOLD
+    }
+
+    fn is_functional_text(text: &str) -> bool {
+        constants::FUNCTIONAL_WORDS.contains(&text.to_lowercase().as_str())
+    }
+}
+
+/// 配置管理器
+#[cfg(feature = "translation")]
+struct ConfigManager;
+
+#[cfg(feature = "translation")]
+impl ConfigManager {
+    fn load_translation_config(target_lang: &str, api_url: Option<&str>) -> TranslationConfig {
+        let lib_config = Self::load_config_from_files();
+        let mut config = lib_config.translation;
+
+        // 应用参数覆盖
+        config.target_lang = target_lang.to_string();
+        config.enabled = true;
+
+        if let Some(url) = api_url {
+            config.deeplx_api_url = url.to_string();
+        }
+
+        // 应用默认优化参数
+        if !Self::config_file_exists() {
+            Self::apply_default_config(&mut config, api_url);
+        }
+
+        config
+    }
+
+    fn load_config_from_files() -> TranslationLibConfig {
+        for path in constants::CONFIG_PATHS {
+            if Path::new(path).exists() {
+                match TranslationLibConfig::from_file(path) {
+                    Ok(config) => {
+                        println!("从 {} 加载配置文件", path);
+                        return config;
+                    }
+                    Err(e) => {
+                        eprintln!("警告: 无法从 {} 加载配置: {}", path, e);
+                    }
+                }
+            }
+        }
+        TranslationLibConfig::default()
+    }
+
+    fn config_file_exists() -> bool {
+        constants::CONFIG_PATHS
+            .iter()
+            .any(|path| Path::new(path).exists())
+    }
+
+    fn apply_default_config(config: &mut TranslationConfig, api_url: Option<&str>) {
+        println!("未找到配置文件，使用优化默认参数");
+        config.max_requests_per_second = 5.0;
+        config.max_text_length = 10000;
+        config.max_paragraphs_per_request = 100;
+
+        if api_url.is_none() {
+            config.deeplx_api_url = "http://localhost:1188/translate".to_string();
+        }
+    }
+
+    fn get_min_translation_chars() -> usize {
+        use std::fs;
+
+        for path in constants::CONFIG_PATHS {
+            if Path::new(path).exists() {
+                if let Ok(content) = fs::read_to_string(path) {
+                    if let Some(value) = Self::parse_min_chars_from_config(&content) {
+                        println!("从配置文件 {} 读取到最小翻译字符数: {}", path, value);
+                        return value;
+                    }
+                }
+            }
+        }
+
+        constants::DEFAULT_MIN_CHARS
+    }
+
+    fn parse_min_chars_from_config(content: &str) -> Option<usize> {
+        for line in content.lines() {
+            if line.trim().starts_with("min_translation_chars") {
+                if let Some(value_part) = line.split('=').nth(1) {
+                    if let Ok(value) = value_part.trim().parse::<usize>() {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+/// DOM文本收集器
+#[cfg(feature = "translation")]
+struct TextCollector;
+
+#[cfg(feature = "translation")]
+impl TextCollector {
+    fn collect_translatable_texts(node: &Handle) -> Vec<TextItem> {
+        let mut texts = Vec::new();
+        Self::collect_recursive(node, &mut texts);
+        texts
+    }
+
+    fn collect_recursive(node: &Handle, texts: &mut Vec<TextItem>) {
+        match node.data {
+            NodeData::Text { ref contents } => {
+                let text = contents.borrow().to_string();
+                if TextFilter::should_translate(&text) {
+                    texts.push(TextItem::new(text, node.clone(), None));
+                }
+            }
+            NodeData::Element { ref name, .. } => {
+                Self::collect_element_attributes(node, texts);
+
+                let tag_name = name.local.as_ref();
+                if !Self::should_skip_element(tag_name) {
+                    for child in node.children.borrow().iter() {
+                        Self::collect_recursive(child, texts);
+                    }
+                }
+            }
+            _ => {
+                for child in node.children.borrow().iter() {
+                    Self::collect_recursive(child, texts);
+                }
+            }
+        }
+    }
+
+    fn collect_element_attributes(node: &Handle, texts: &mut Vec<TextItem>) {
+        for attr_name in constants::TRANSLATABLE_ATTRS {
+            if let Some(attr_value) = get_node_attr(node, attr_name) {
+                if TextFilter::should_translate(&attr_value) {
+                    texts.push(TextItem::new(
+                        attr_value,
+                        node.clone(),
+                        Some(attr_name.to_string()),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn should_skip_element(tag_name: &str) -> bool {
+        constants::SKIP_ELEMENTS.contains(&tag_name)
+    }
+}
+
+/// 翻译处理器 - 使用索引标记系统
+#[cfg(feature = "translation")]
+struct TranslationProcessor<'a> {
+    translator: &'a TranslationService,
+}
+
+#[cfg(feature = "translation")]
+impl<'a> TranslationProcessor<'a> {
+    fn new(translator: &'a TranslationService) -> Self {
+        Self { translator }
+    }
+
+    async fn process_batches(&self, batches: Vec<Vec<TextItem>>) -> Result<(), MonolithError> {
+        let batch_count = batches.len();
+        println!("创建了 {} 个批次进行翻译", batch_count);
+
+        for (i, batch) in batches.into_iter().enumerate() {
+            println!("开始处理批次 {}/{}", i + 1, batch_count);
+
+            let batch_char_count: usize = batch.iter().map(|item| item.char_count()).sum();
+            println!("批次 {} 字符数: {}", i + 1, batch_char_count);
+
+            if let Err(e) = self.process_single_batch(&batch, i + 1).await {
+                eprintln!("批次处理失败: {}", e);
+            }
+
+            // 批次间延迟
+            if i < batch_count - 1 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(
+                    constants::BATCH_DELAY_MS,
+                ))
+                .await;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn process_single_batch(
+        &self,
+        batch: &[TextItem],
+        batch_id: usize,
+    ) -> Result<(), MonolithError> {
+        if batch.len() <= constants::SMALL_BATCH_THRESHOLD {
+            return self.process_individual_items(batch, batch_id).await;
+        }
+
+        println!("批次{}: 开始翻译{}个文本", batch_id, batch.len());
+
+        // 策略1: 尝试索引标记系统
+        if let Ok(success) = self.try_indexed_translation(batch, batch_id).await {
+            if success {
+                println!("  ✓ 索引标记翻译成功");
+                return Ok(());
+            }
+        }
+
+        // 策略2: 回退到小批次
+        println!("  索引标记翻译失败，使用小批次策略");
+        self.retry_with_smaller_batches(batch).await;
+
+        Ok(())
+    }
+
+    async fn try_indexed_translation(
+        &self,
+        batch: &[TextItem],
+        batch_id: usize,
+    ) -> Result<bool, MonolithError> {
+        let combined_text = self.combine_texts_with_indices(batch);
+        let start_time = std::time::Instant::now();
+
+        print!(
+            "批次{}: 索引标记翻译{}个文本({} 字符)... ",
+            batch_id,
+            batch.len(),
+            combined_text.len()
+        );
+
+        match self.translator.translate(&combined_text).await {
+            Ok(translated) => {
+                let success = self.apply_indexed_batch_translation(batch, &translated);
+                if success {
+                    println!("✓ 用时 {:?}", start_time.elapsed());
+                } else {
+                    println!("✗ 索引匹配失败");
+                }
+                Ok(success)
+            }
+            Err(e) => {
+                println!("✗ 翻译请求失败: {}", e);
+                Ok(false)
+            }
+        }
+    }
+
+    fn combine_texts_with_indices(&self, batch: &[TextItem]) -> String {
+        batch
+            .iter()
+            .enumerate()
+            .map(|(i, item)| format!("[{}] {}", i, item.text.trim()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn apply_indexed_batch_translation(&self, batch: &[TextItem], translated: &str) -> bool {
+        use regex::Regex;
+
+        // 匹配 [数字] 开头的行
+        let index_regex = match Regex::new(r"^\[(\d+)\]\s*(.*)$") {
+            Ok(regex) => regex,
+            Err(e) => {
+                eprintln!("正则表达式编译失败: {}", e);
+                return false;
+            }
+        };
+
+        let mut translations = std::collections::HashMap::new();
+
+        for line in translated.lines() {
+            if let Some(captures) = index_regex.captures(line.trim()) {
+                if let (Some(index_str), Some(text)) = (captures.get(1), captures.get(2)) {
+                    if let Ok(index) = index_str.as_str().parse::<usize>() {
+                        let translated_text = text.as_str().trim();
+                        if !translated_text.is_empty() {
+                            translations.insert(index, translated_text);
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("批量翻译结果分析:");
+        println!("  输入文本数: {}", batch.len());
+        println!("  解析到的翻译数: {}", translations.len());
+
+        // 检查是否所有索引都有对应的翻译
+        let mut success_count = 0;
+        for (i, item) in batch.iter().enumerate() {
+            if let Some(translated_text) = translations.get(&i) {
+                Self::apply_translation(item, translated_text);
+                success_count += 1;
+            } else {
+                println!("  警告: 索引 {} 没有找到对应的翻译", i);
+            }
+        }
+
+        let success_rate = success_count as f32 / batch.len() as f32;
+        println!(
+            "  成功翻译率: {:.1}% ({}/{})",
+            success_rate * 100.0,
+            success_count,
+            batch.len()
+        );
+
+        // 如果成功率超过80%，认为批量翻译成功
+        success_rate >= 0.8
+    }
+
+    async fn process_individual_items(
+        &self,
+        batch: &[TextItem],
+        batch_id: usize,
+    ) -> Result<(), MonolithError> {
+        for (i, item) in batch.iter().enumerate() {
+            print!("批次{}-{}/{}: ", batch_id, i + 1, batch.len());
+            match self.translator.translate(&item.text).await {
+                Ok(translated) => {
+                    Self::apply_translation(item, &translated.trim());
+                    println!("✓ {}", item.text.chars().take(25).collect::<String>());
+                }
+                Err(e) => {
+                    println!(
+                        "✗ 失败: {} - {}",
+                        e,
+                        item.text.chars().take(25).collect::<String>()
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn retry_with_smaller_batches(&self, batch: &[TextItem]) {
+        let min_chars = ConfigManager::get_min_translation_chars();
+        let batch_manager = BatchManager::new(min_chars);
+        let small_batches = batch_manager.create_batches(batch.to_vec());
+
+        for small_batch in small_batches {
+            self.translate_small_batch(&small_batch).await;
+        }
+    }
+
+    async fn translate_small_batch(&self, batch: &[TextItem]) {
+        let combined_text = self.combine_texts_with_indices(batch);
+        let char_count = combined_text.len();
+
+        print!(
+            "小批次索引翻译{}个文本({} 字符)... ",
+            batch.len(),
+            char_count
+        );
+
+        match self.translator.translate(&combined_text).await {
+            Ok(translated) => {
+                if self.apply_indexed_batch_translation(batch, &translated) {
+                    println!("✓");
+                } else {
+                    println!("小批次索引匹配失败，单独翻译");
+                    self.fallback_individual_translation(batch).await;
+                }
+            }
+            Err(e) => {
+                println!("✗ 小批次失败: {}", e);
+                self.fallback_individual_translation(batch).await;
+            }
+        }
+    }
+
+    async fn fallback_individual_translation(&self, batch: &[TextItem]) {
+        for item in batch.iter() {
+            if let Ok(translated) = self.translator.translate(&item.text).await {
+                Self::apply_translation(item, &translated.trim());
+            }
+        }
+    }
+
+    fn apply_translation(item: &TextItem, translated: &str) {
+        let trimmed_translated = translated.trim();
+
+        if trimmed_translated.is_empty() {
+            eprintln!("警告: 翻译结果为空，跳过: '{}'", item.text.trim());
+            return;
+        }
+
+        if trimmed_translated == item.text.trim() && item.text.len() > 5 {
+            println!(
+                "注意: 翻译结果与原文相同，可能是专有名词: '{}'",
+                trimmed_translated
+            );
+        }
+
+        if let Some(attr_name) = &item.attr_name {
+            set_node_attr(&item.node, attr_name, Some(trimmed_translated.to_string()));
+        } else if let NodeData::Text { ref contents } = item.node.data {
+            let mut content_ref = contents.borrow_mut();
+            content_ref.clear();
+            content_ref.push_slice(trimmed_translated);
+        }
+    }
+}
+
+/// 主要翻译接口
+#[cfg(feature = "translation")]
+pub async fn translate_dom_content(
+    dom: RcDom,
+    target_lang: &str,
+    api_url: Option<&str>,
+) -> Result<RcDom, MonolithError> {
+    let config = ConfigManager::load_translation_config(target_lang, api_url);
+    let translator = TranslationService::new(config);
+
+    let texts = TextCollector::collect_translatable_texts(&dom.document);
+
+    if texts.is_empty() {
+        println!("没有找到需要翻译的文本");
+        return Ok(dom);
+    }
+
+    println!("收集到 {} 个待翻译文本", texts.len());
+
+    let min_chars = ConfigManager::get_min_translation_chars();
+    let batch_manager = BatchManager::new(min_chars);
+    let batches = batch_manager.create_batches(texts);
+
+    let processor = TranslationProcessor::new(&translator);
+    processor.process_batches(batches).await?;
+
+    Ok(dom)
+}
+
+/// CSS翻译功能
+#[cfg(feature = "translation")]
+pub async fn translate_css_content(
+    css: &str,
+    translator: &TranslationService,
+) -> Result<String, MonolithError> {
+    use regex::Regex;
+
+    let content_re = Regex::new(r#"content\s*:\s*["']([^"']+)["']"#)
+        .map_err(|e| MonolithError::new(&format!("正则表达式错误: {}", e)))?;
+
+    let mut result = css.to_string();
+
+    for cap in content_re.captures_iter(css) {
+        if let Some(text_match) = cap.get(1) {
+            let text = text_match.as_str();
+            if TextFilter::should_translate(text) {
+                match translator.translate(text).await {
+                    Ok(translated) => {
+                        let full_match = cap.get(0).unwrap().as_str();
+                        let translated_rule = full_match.replace(text, &translated);
+                        result = result.replace(full_match, &translated_rule);
+                    }
+                    Err(e) => {
+                        eprintln!("CSS翻译警告: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// 生成示例配置文件
+#[cfg(feature = "translation")]
+pub fn generate_example_config() -> Result<(), MonolithError> {
+    let config_path = "translation-config.toml";
+
+    if Path::new(config_path).exists() {
+        println!("配置文件 {} 已存在，跳过生成", config_path);
+        return Ok(());
+    }
+
+    match TranslationLibConfig::generate_example_config(config_path) {
+        Ok(_) => {
+            println!("已生成示例配置文件: {}", config_path);
+            println!("请编辑该文件以配置翻译参数");
+            Ok(())
+        }
+        Err(e) => Err(MonolithError::new(&format!("生成配置文件失败: {}", e))),
+    }
+}
+
+/// 为了向后兼容，提供配置加载函数
+#[cfg(feature = "translation")]
+pub fn load_translation_config(target_lang: &str, api_url: Option<&str>) -> TranslationConfig {
+    ConfigManager::load_translation_config(target_lang, api_url)
+}
+
+/// 同步翻译接口 - 统一处理所有情况
+pub fn translate_dom_content_sync(
+    dom: RcDom,
+    target_lang: &str,
+    api_url: Option<&str>,
+) -> Result<RcDom, MonolithError> {
+    #[cfg(feature = "translation")]
+    {
+        let rt = tokio::runtime::Runtime::new()
+            .map_err(|e| MonolithError::new(&format!("创建异步运行时失败: {}", e)))?;
+
+        rt.block_on(translate_dom_content(dom, target_lang, api_url))
+    }
+
+    #[cfg(not(feature = "translation"))]
+    {
+        // 避免未使用参数警告
+        let _ = (target_lang, api_url);
+        Ok(dom)
+    }
+}

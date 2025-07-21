@@ -11,7 +11,6 @@ pub mod types;
 pub use config::*;
 pub use handlers::*;
 pub use routes::*;
-pub use templates::*;
 pub use types::*;
 
 use std::sync::Arc;

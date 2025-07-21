@@ -14,7 +14,7 @@ use crate::web::types::{AppState, BookmarkletResponse};
 /// 生成书签脚本
 #[cfg(feature = "web")]
 pub async fn generate_bookmarklet(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
 ) -> Result<Json<BookmarkletResponse>, (StatusCode, Json<serde_json::Value>)> {
     // 获取当前服务器地址（这里简化处理，实际应用中可能需要从请求头获取）
     let server_url = "http://localhost:7080"; // 可以从配置中获取
