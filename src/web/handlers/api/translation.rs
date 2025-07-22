@@ -146,7 +146,27 @@ pub async fn translate_url(
     };
 
     let original_html = String::from_utf8_lossy(&original_data).to_string();
-    let translated_html = String::from_utf8_lossy(&translated_data).to_string();
+    let mut translated_html = String::from_utf8_lossy(&translated_data).to_string();
+
+    // 对翻译后的HTML进行链接重写，使链接指向翻译服务
+    #[cfg(feature = "translation")]
+    {
+        use crate::parsers::link_rewriter::rewrite_links_in_html;
+        
+        // 检查是否启用了链接重写功能
+        if state.monolith_options.rewrite_links {
+            let translation_base_path = state.monolith_options.translation_base_path
+                .as_deref()
+                .unwrap_or("/website/");
+                
+            if let Ok(rewritten_html) = rewrite_links_in_html(&translated_html, &url, Some(translation_base_path)) {
+                translated_html = rewritten_html;
+            } else {
+                // 如果链接重写失败，记录错误但继续使用原始HTML
+                eprintln!("警告: 链接重写失败，使用原始翻译结果");
+            }
+        }
+    }
 
     // 使用标题
     let title = translated_title.or(original_title);

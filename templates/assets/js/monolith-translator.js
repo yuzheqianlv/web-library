@@ -59,6 +59,13 @@ class MonolithTranslator {
         if (successToast) {
             successToast.addEventListener('click', () => this.hideSuccess());
         }
+        
+        // 监听来自iframe的链接点击消息
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'link-clicked') {
+                this.handleLinkClick(event.data.url);
+            }
+        });
     }
 
     /**
@@ -145,6 +152,9 @@ class MonolithTranslator {
         } else {
             this.setupBilingualSync();
         }
+        
+        // 设置链接拦截
+        this.setupLinkInterception();
     }
 
     /**
@@ -466,6 +476,238 @@ class MonolithTranslator {
     updateSyncStatus(message, isError) {
         this.syncStatus.textContent = message;
         this.syncIndicator.classList.toggle('error', isError);
+    }
+
+    /**
+     * 设置iframe内的链接拦截
+     */
+    setupLinkInterception() {
+        const frames = [
+            this.translatedFrame,
+            this.originalFrame,
+            this.bilingualTranslated,
+            this.bilingualOriginal
+        ];
+
+        frames.forEach(frame => {
+            if (frame) {
+                frame.addEventListener('load', () => {
+                    this.injectLinkInterceptionScript(frame);
+                });
+            }
+        });
+    }
+
+    /**
+     * 向iframe注入链接拦截脚本
+     * @param {HTMLIFrameElement} frame - 目标iframe
+     */
+    injectLinkInterceptionScript(frame) {
+        try {
+            const frameDoc = frame.contentDocument || frame.contentWindow.document;
+            if (!frameDoc) {
+                console.warn('无法访问iframe内容，可能是跨域限制');
+                return;
+            }
+
+            // 创建链接拦截脚本
+            const script = frameDoc.createElement('script');
+            script.textContent = `
+                (function() {
+                    // 拦截所有链接点击
+                    function interceptLinks() {
+                        const links = document.querySelectorAll('a[href]');
+                        links.forEach(link => {
+                            link.addEventListener('click', function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                
+                                const href = this.getAttribute('href');
+                                if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:')) {
+                                    return;
+                                }
+                                
+                                // 处理相对URL
+                                let fullUrl = href;
+                                if (!href.startsWith('http://') && !href.startsWith('https://')) {
+                                    const base = window.location.href;
+                                    const baseUrl = new URL(base);
+                                    fullUrl = new URL(href, baseUrl.origin).href;
+                                }
+                                
+                                // 发送消息到父窗口
+                                window.parent.postMessage({
+                                    type: 'link-clicked',
+                                    url: fullUrl
+                                }, '*');
+                            });
+                        });
+                    }
+                    
+                    // 立即执行和DOM变化时重新执行
+                    interceptLinks();
+                    
+                    // 监听动态添加的链接
+                    const observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            mutation.addedNodes.forEach(function(node) {
+                                if (node.nodeType === 1) { // Element node
+                                    if (node.tagName === 'A' && node.href) {
+                                        interceptLink(node);
+                                    } else {
+                                        const links = node.querySelectorAll && node.querySelectorAll('a[href]');
+                                        if (links) {
+                                            links.forEach(interceptLink);
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                    });
+                    
+                    function interceptLink(link) {
+                        link.addEventListener('click', function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            
+                            const href = this.getAttribute('href');
+                            if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:')) {
+                                return;
+                            }
+                            
+                            let fullUrl = href;
+                            if (!href.startsWith('http://') && !href.startsWith('https://')) {
+                                const base = window.location.href;
+                                const baseUrl = new URL(base);
+                                fullUrl = new URL(href, baseUrl.origin).href;
+                            }
+                            
+                            window.parent.postMessage({
+                                type: 'link-clicked',
+                                url: fullUrl
+                            }, '*');
+                        });
+                    }
+                    
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                })();
+            `;
+
+            // 将脚本注入到iframe的文档头部
+            const frameHead = frameDoc.head || frameDoc.getElementsByTagName('head')[0] || frameDoc.documentElement;
+            frameHead.appendChild(script);
+            
+            console.log('链接拦截脚本已注入到iframe');
+        } catch (error) {
+            console.warn('注入链接拦截脚本失败，可能是跨域限制:', error);
+        }
+    }
+
+    /**
+     * 处理被拦截的链接点击
+     * @param {string} url - 被点击的链接URL
+     */
+    handleLinkClick(url) {
+        if (!url || !this.isValidUrl(url)) {
+            this.showError('无效的链接地址');
+            return;
+        }
+
+        // 显示链接拦截提示
+        this.showLinkInterceptedNotification(url);
+        
+        // 自动填入URL并翻译
+        this.loadUrlInInput(url);
+    }
+
+    /**
+     * 显示链接拦截通知
+     * @param {string} url - 被拦截的URL
+     */
+    showLinkInterceptedNotification(url) {
+        // 创建通知元素
+        const notification = document.createElement('div');
+        notification.className = 'link-intercepted-notification';
+        notification.innerHTML = `
+            <div class="notification-content">
+                <span class="notification-icon">🔗</span>
+                <span class="notification-text">正在翻译链接: ${this.truncateUrl(url, 50)}</span>
+            </div>
+        `;
+        
+        // 添加样式
+        notification.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 10000;
+            font-size: 14px;
+            max-width: 400px;
+            animation: slideInRight 0.3s ease-out;
+        `;
+        
+        // 添加动画样式
+        if (!document.querySelector('#link-notification-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'link-notification-styles';
+            styles.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                .link-intercepted-notification .notification-content {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+        
+        document.body.appendChild(notification);
+        
+        // 3秒后自动移除通知
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.animation = 'slideInRight 0.3s ease-out reverse';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 3000);
+    }
+
+    /**
+     * 将URL加载到输入框并触发翻译
+     * @param {string} url - 要加载的URL
+     */
+    loadUrlInInput(url) {
+        this.urlInput.value = url;
+        // 延迟执行翻译，让用户看到URL已填入
+        setTimeout(() => {
+            this.handleTranslate();
+        }, 500);
+    }
+
+    /**
+     * 截断URL显示
+     * @param {string} url - 要截断的URL
+     * @param {number} maxLength - 最大长度
+     * @returns {string} 截断后的URL
+     */
+    truncateUrl(url, maxLength) {
+        if (url.length <= maxLength) return url;
+        return url.substring(0, maxLength - 3) + '...';
     }
 
     /**

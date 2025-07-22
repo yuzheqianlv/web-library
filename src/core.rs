@@ -104,6 +104,10 @@ pub struct MonolithOptions {
     pub target_language: Option<String>,
     #[cfg(feature = "translation")]
     pub translation_api_url: Option<String>,
+    #[cfg(feature = "translation")]
+    pub rewrite_links: bool,
+    #[cfg(feature = "translation")]
+    pub translation_base_path: Option<String>,
 }
 
 const ANSI_COLOR_RED: &str = "\x1b[31m";

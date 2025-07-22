@@ -7,7 +7,6 @@ on:
     - 'assets/'
     - 'dist/'
     - 'snap/'
-    - 'Dockerfile'
     - 'LICENSE'
     - 'Makefile'
     - 'monolith.nuspec'
