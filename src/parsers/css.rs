@@ -2,8 +2,8 @@ use cssparser::{
     serialize_identifier, serialize_string, ParseError, Parser, ParserInput, SourcePosition, Token,
 };
 
-use crate::session::Session;
-use crate::url::{create_data_url, resolve_url, Url, EMPTY_IMAGE_DATA_URL};
+use crate::network::session::Session;
+use crate::utils::url::{create_data_url, resolve_url, Url, EMPTY_IMAGE_DATA_URL};
 
 const CSS_PROPS_WITH_IMAGE_URLS: &[&str] = &[
     // Universal
@@ -155,7 +155,7 @@ pub fn process_css<'a>(
                     curr_rule = "".to_string();
 
                     // Skip empty import values
-                    if value.len() == 0 {
+                    if value.is_empty() {
                         result.push_str("''");
                         continue;
                     }
@@ -196,7 +196,7 @@ pub fn process_css<'a>(
                     }
                 } else if func_name == "url" {
                     // Skip empty url()'s
-                    if value.len() == 0 {
+                    if value.is_empty() {
                         continue;
                     }
 
@@ -278,7 +278,7 @@ pub fn process_css<'a>(
                 }
 
                 // Skip empty url()'s
-                if value.len() < 1 {
+                if value.is_empty() {
                     result.push_str("url()");
                     continue;
                 } else if value.starts_with("#") {

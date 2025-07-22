@@ -3,11 +3,7 @@
 use std::sync::Arc;
 
 #[cfg(feature = "web")]
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 
 use crate::web::types::{AppState, BookmarkletResponse};
 
@@ -18,7 +14,7 @@ pub async fn generate_bookmarklet(
 ) -> Result<Json<BookmarkletResponse>, (StatusCode, Json<serde_json::Value>)> {
     // 获取当前服务器地址（这里简化处理，实际应用中可能需要从请求头获取）
     let server_url = "http://localhost:7080"; // 可以从配置中获取
-    
+
     let bookmarklet_code = format!(
         r#"javascript:(function(){{
     var url = encodeURIComponent(window.location.href);
@@ -27,7 +23,7 @@ pub async fn generate_bookmarklet(
 }})();"#,
         server_url
     );
-    
+
     let installation_guide = r#"
 ## 书签脚本安装指南
 
@@ -47,8 +43,9 @@ pub async fn generate_bookmarklet(
 1. 将下方代码复制到剪贴板
 2. 添加任意页面为书签
 3. 编辑书签，将 URL 替换为书签脚本代码
-"#.to_string();
-    
+"#
+    .to_string();
+
     let example_usage = r#"
 ## 使用方法
 
@@ -63,14 +60,15 @@ pub async fn generate_bookmarklet(
 - 自动跳转到 Monolith 翻译服务
 - 无需手动复制粘贴 URL
 - 支持所有主流浏览器
-"#.to_string();
-    
+"#
+    .to_string();
+
     let response = BookmarkletResponse {
         bookmarklet_code,
         installation_guide,
         example_usage,
     };
-    
+
     Ok(Json(response))
 }
 

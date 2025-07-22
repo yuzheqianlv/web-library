@@ -1,23 +1,20 @@
 //! 页面处理器
 
 #[cfg(feature = "web")]
-use axum::{
-    extract::Path,
-    response::Html,
-};
+use axum::{extract::Path, response::Html};
 
 use crate::web::templates;
 
 /// 主页处理器
 #[cfg(feature = "web")]
 pub async fn index() -> Html<String> {
-    let config = crate::html_builder::HtmlBuilderConfig {
+    let config = crate::builders::html_builder::HtmlBuilderConfig {
         template_dir: "templates".to_string(),
         inline_assets: true, // 内联所有资源以便单文件部署
         asset_base_path: "/".to_string(),
     };
-    
-    let builder = crate::html_builder::HtmlBuilder::new(config);
+
+    let builder = crate::builders::html_builder::HtmlBuilder::new(config);
     match builder.build_index_page() {
         Ok(html) => Html(html),
         Err(_) => {
@@ -47,22 +44,22 @@ pub async fn bookmarklet_page() -> Html<String> {
 pub async fn website_bookmarklet(Path(url_path): Path<String>) -> Html<String> {
     // URL 路径已经由 Axum 自动解码，去除前导斜杠
     let clean_url = url_path.trim_start_matches('/');
-    
+
     // 验证 URL 格式
     let final_url = if clean_url.starts_with("http://") || clean_url.starts_with("https://") {
         clean_url.to_string()
     } else {
         format!("https://{}", clean_url)
     };
-    
+
     // 构建带预加载 URL 的主页
-    let config = crate::html_builder::HtmlBuilderConfig {
+    let config = crate::builders::html_builder::HtmlBuilderConfig {
         template_dir: "templates".to_string(),
         inline_assets: true,
         asset_base_path: "/".to_string(),
     };
-    
-    let builder = crate::html_builder::HtmlBuilder::new(config);
+
+    let builder = crate::builders::html_builder::HtmlBuilder::new(config);
     match builder.build_index_page_with_url(&final_url) {
         Ok(html) => Html(html),
         Err(_) => {

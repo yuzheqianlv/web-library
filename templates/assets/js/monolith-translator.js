@@ -9,6 +9,8 @@ class MonolithTranslator {
         this.bindEvents();
         this.currentMode = 'translated';
         this.navbarVisible = true;
+        this.initThemeIntegration();
+        this.initScrollSync();
     }
 
     /**
@@ -51,6 +53,12 @@ class MonolithTranslator {
 
         // 点击错误提示关闭
         this.errorToast.addEventListener('click', () => this.hideError());
+        
+        // 点击成功提示关闭
+        const successToast = document.getElementById('success-toast');
+        if (successToast) {
+            successToast.addEventListener('click', () => this.hideSuccess());
+        }
     }
 
     /**
@@ -130,7 +138,13 @@ class MonolithTranslator {
         this.switchMode(this.currentMode);
         
         // 设置双语模式的同步滚动
-        this.setupBilingualSync();
+        if (this.scrollSyncManager) {
+            this.scrollSyncManager.setupBilingualSync();
+        } else if (this.simpleScrollSync) {
+            this.simpleScrollSync.start();
+        } else {
+            this.setupBilingualSync();
+        }
     }
 
     /**
@@ -207,6 +221,117 @@ class MonolithTranslator {
      */
     hideError() {
         this.errorToast.classList.remove('show');
+    }
+
+    /**
+     * 显示成功提示
+     * @param {string} message - 成功信息
+     */
+    showSuccess(message) {
+        const successToast = document.getElementById('success-toast');
+        if (successToast) {
+            successToast.textContent = message;
+            successToast.classList.add('show');
+            
+            // 3秒后自动隐藏
+            setTimeout(() => this.hideSuccess(), 3000);
+        }
+    }
+
+    /**
+     * 隐藏成功提示
+     */
+    hideSuccess() {
+        const successToast = document.getElementById('success-toast');
+        if (successToast) {
+            successToast.classList.remove('show');
+        }
+    }
+
+    /**
+     * 初始化主题集成
+     */
+    initThemeIntegration() {
+        // 监听主题变化
+        if (window.themeManager) {
+            window.themeManager.onThemeChange((newTheme, oldTheme) => {
+                this.onThemeChanged(newTheme, oldTheme);
+            });
+        }
+    }
+
+    /**
+     * 初始化滚动同步管理器
+     */
+    initScrollSync() {
+        if (window.ImprovedScrollSync) {
+            this.scrollSyncManager = new window.ImprovedScrollSync(this);
+            console.log('高级滚动同步管理器已初始化');
+        } else if (window.SimpleScrollSync) {
+            this.simpleScrollSync = new window.SimpleScrollSync(this);
+            console.log('简单滚动同步管理器已初始化');
+        } else {
+            console.warn('滚动同步库未加载，将使用原始同步方法');
+        }
+    }
+
+    /**
+     * 主题变化处理
+     * @param {string} newTheme - 新主题
+     * @param {string} oldTheme - 旧主题
+     */
+    onThemeChanged(newTheme, oldTheme) {
+        // 显示主题切换成功提示
+        const themeInfo = window.themeManager?.getCurrentTheme();
+        if (themeInfo) {
+            this.showSuccess(`已切换到${themeInfo.display_name}`);
+        }
+
+        // 更新iframe内容的主题适配
+        this.updateIframeThemeAdaptation(newTheme);
+        
+        // 重新设置同步滚动（可能需要重新初始化）
+        if (this.currentMode === 'bilingual') {
+            setTimeout(() => {
+                if (this.scrollSyncManager) {
+                    this.scrollSyncManager.setupBilingualSync();
+                } else {
+                    this.setupBilingualSync();
+                }
+            }, 500);
+        }
+    }
+
+    /**
+     * 更新iframe主题适配
+     * @param {string} themeName - 主题名称
+     */
+    updateIframeThemeAdaptation(themeName) {
+        const isDarkTheme = window.themeManager?.isCurrentThemeDark() || false;
+        
+        // 为iframe添加主题相关的类
+        const frames = [
+            this.translatedFrame,
+            this.originalFrame,
+            this.bilingualTranslated,
+            this.bilingualOriginal
+        ];
+
+        frames.forEach(frame => {
+            if (frame && frame.contentDocument) {
+                try {
+                    const frameBody = frame.contentDocument.body;
+                    if (frameBody) {
+                        frameBody.className = frameBody.className
+                            .replace(/theme-\w+/g, '')
+                            .trim() + ` theme-${themeName}`;
+                    }
+                } catch (error) {
+                    // 跨域限制，忽略错误
+                    console.debug('Cannot access iframe content due to CORS:', error);
+                }
+            }
+        });
     }
 
     /**

@@ -66,9 +66,9 @@ pub struct LocalCache {
 impl LocalCache {
     /// 创建新的本地缓存
     pub fn new(capacity: usize) -> Self {
-        let cache = Arc::new(RwLock::new(
-            LruCache::new(NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1000).unwrap()))
-        ));
+        let cache = Arc::new(RwLock::new(LruCache::new(
+            NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1000).unwrap()),
+        )));
 
         Self {
             cache,
@@ -79,7 +79,7 @@ impl LocalCache {
     /// 获取缓存项
     pub async fn get(&mut self, key: &str) -> Option<CacheEntry> {
         let mut cache = self.cache.write().await;
-        
+
         if let Some(entry) = cache.get(key) {
             if entry.is_expired() {
                 cache.pop(key);
@@ -152,10 +152,6 @@ impl LocalCache {
 pub struct CacheManager {
     #[cfg(feature = "translation")]
     local_cache: Option<LocalCache>,
-    #[cfg(feature = "web")]
-    redis_cache: Option<crate::redis_cache::RedisCache>,
-    #[cfg(not(feature = "web"))]
-    redis_cache: Option<()>,
     config: CacheConfig,
     stats: CacheStats,
 }
@@ -173,22 +169,11 @@ impl CacheManager {
         Self {
             #[cfg(feature = "translation")]
             local_cache,
-            redis_cache: None,
             config,
             stats: CacheStats::default(),
         }
     }
 
-    /// 设置Redis缓存
-    #[cfg(feature = "web")]
-    pub fn set_redis_cache(&mut self, redis_cache: crate::redis_cache::RedisCache) {
-        self.redis_cache = Some(redis_cache);
-    }
-    
-    #[cfg(not(feature = "web"))]
-    pub fn set_redis_cache(&mut self, _redis_cache: ()) {
-        // No-op when web feature is not enabled
-    }
 
     /// 获取翻译缓存
     pub async fn get_translation(
@@ -208,39 +193,7 @@ impl CacheManager {
             }
         }
 
-        // 再查Redis缓存
-        #[cfg(feature = "web")]
-        if let Some(ref redis_cache) = self.redis_cache {
-            match redis_cache.get(text, source_lang, target_lang) {
-                Ok(Some(cached)) => {
-                    self.stats.redis_hits += 1;
-                    
-                    // 回填本地缓存
-                    #[cfg(feature = "translation")]
-                    if let Some(ref mut local_cache) = self.local_cache {
-                        let entry = CacheEntry {
-                            key: key.clone(),
-                            original_text: text.to_string(),
-                            translated_text: cached.translated_html.clone(),
-                            source_lang: source_lang.to_string(),
-                            target_lang: target_lang.to_string(),
-                            created_at: SystemTime::now(),
-                            ttl: self.config.default_ttl,
-                        };
-                        local_cache.set(entry).await;
-                    }
-                    
-                    return Ok(Some(cached.translated_html));
-                }
-                Ok(None) => {
-                    self.stats.redis_misses += 1;
-                }
-                Err(e) => {
-                    tracing::warn!("Redis缓存查询失败: {}", e);
-                    self.stats.redis_errors += 1;
-                }
-            }
-        }
+        // Redis缓存已被移除，仅使用本地缓存
 
         self.stats.total_misses += 1;
         Ok(None)
@@ -255,7 +208,7 @@ impl CacheManager {
         translated: &str,
     ) -> TranslationResult<()> {
         let key = CacheEntry::generate_key(text, source_lang, target_lang);
-        
+
         let entry = CacheEntry {
             key: key.clone(),
             original_text: text.to_string(),
@@ -273,26 +226,7 @@ impl CacheManager {
             self.stats.local_sets += 1;
         }
 
-        // 设置Redis缓存
-        #[cfg(feature = "web")]
-        if let Some(ref redis_cache) = self.redis_cache {
-            let cached_translation = crate::redis_cache::create_cached_translation(
-                format!("cache://{}", key),
-                text.to_string(),
-                translated.to_string(),
-                None,
-                source_lang.to_string(),
-                target_lang.to_string(),
-                Some(self.config.default_ttl.as_secs()),
-            );
-
-            if let Err(e) = redis_cache.set(&cached_translation) {
-                tracing::warn!("Redis缓存设置失败: {}", e);
-                self.stats.redis_errors += 1;
-            } else {
-                self.stats.redis_sets += 1;
-            }
-        }
+        // Redis缓存已被移除，仅使用本地缓存
 
         Ok(())
     }
@@ -313,7 +247,10 @@ impl CacheManager {
     }
 
     /// 预热缓存
-    pub async fn warmup(&mut self, common_texts: Vec<(String, String, String)>) -> TranslationResult<()> {
+    pub async fn warmup(
+        &mut self,
+        common_texts: Vec<(String, String, String)>,
+    ) -> TranslationResult<()> {
         if !self.config.enable_warmup {
             return Ok(());
         }
@@ -323,7 +260,9 @@ impl CacheManager {
         for (text, source_lang, target_lang) in common_texts {
             // 这里可以预先计算和缓存常用翻译
             // 实际实现中需要调用翻译服务
-            let _ = self.get_translation(&text, &source_lang, &target_lang).await;
+            let _ = self
+                .get_translation(&text, &source_lang, &target_lang)
+                .await;
         }
 
         Ok(())
@@ -346,17 +285,10 @@ impl CacheManager {
         #[cfg(not(feature = "translation"))]
         let local_size = 0;
 
-        let redis_size = if let Some(ref _redis_cache) = self.redis_cache {
-            // Redis缓存大小查询实现
-            0 // 占位符
-        } else {
-            0
-        };
-
         CacheInfo {
             local_cache_size: local_size,
-            redis_cache_size: redis_size,
-            total_entries: local_size + redis_size,
+            redis_cache_size: 0, // Redis已被移除
+            total_entries: local_size,
             hit_rate: self.stats.hit_rate(),
         }
     }
@@ -369,8 +301,6 @@ pub struct CacheConfig {
     pub enable_local_cache: bool,
     /// 本地缓存大小
     pub local_cache_size: usize,
-    /// 启用Redis缓存
-    pub enable_redis_cache: bool,
     /// 默认TTL
     pub default_ttl: Duration,
     /// 启用缓存预热
@@ -384,7 +314,6 @@ impl Default for CacheConfig {
         Self {
             enable_local_cache: true,
             local_cache_size: 1000,
-            enable_redis_cache: false,
             default_ttl: Duration::from_secs(3600),
             enable_warmup: false,
             cleanup_interval: Duration::from_secs(300),

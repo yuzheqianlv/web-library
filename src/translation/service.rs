@@ -12,27 +12,27 @@ use markdown_translator::TranslationService as BaseTranslationService;
 
 use crate::translation::{
     batch::{BatchManager, BatchManagerConfig},
-    cache::{CacheManager, CacheConfig},
-    collector::{TextCollector, CollectorConfig},
+    cache::{CacheConfig, CacheManager},
+    collector::{CollectorConfig, TextCollector},
     config::{ConfigManager, EnhancedTranslationConfig},
     error::{TranslationError, TranslationResult},
     filters::TextFilter,
-    processor::{TranslationProcessor, ProcessorConfig},
+    processor::{ProcessorConfig, TranslationProcessor},
 };
 
 /// 增强的翻译服务
 pub struct EnhancedTranslationService {
     #[cfg(feature = "translation")]
     base_service: Arc<BaseTranslationService>,
-    
+
     config_manager: ConfigManager,
     text_collector: TextCollector,
     batch_manager: BatchManager,
     cache_manager: CacheManager,
-    
+
     #[cfg(feature = "translation")]
     processor: TranslationProcessor,
-    
+
     stats: ServiceStats,
 }
 
@@ -41,15 +41,15 @@ impl EnhancedTranslationService {
     #[cfg(feature = "translation")]
     pub fn new(config: EnhancedTranslationConfig) -> TranslationResult<Self> {
         let base_service = Arc::new(BaseTranslationService::new(config.base.clone()));
-        
+
         let config_manager = ConfigManager::new()?;
-        
+
         let collector_config = CollectorConfig::default();
         let text_collector = TextCollector::new(collector_config);
-        
+
         let batch_config = BatchManagerConfig::from(&config);
         let batch_manager = BatchManager::new(batch_config);
-        
+
         let cache_config = CacheConfig {
             enable_local_cache: config.cache.enabled,
             local_cache_size: config.cache.local_cache_size,
@@ -58,7 +58,7 @@ impl EnhancedTranslationService {
             ..Default::default()
         };
         let cache_manager = CacheManager::new(cache_config);
-        
+
         let processor_config = ProcessorConfig::default();
         let processor = TranslationProcessor::new(base_service.clone(), processor_config);
 
@@ -84,7 +84,7 @@ impl EnhancedTranslationService {
             };
             Self::new(enhanced_config)
         }
-        
+
         #[cfg(not(feature = "translation"))]
         {
             let _ = (target_lang, api_url);
@@ -100,8 +100,10 @@ impl EnhancedTranslationService {
         tracing::info!("开始DOM翻译处理");
 
         // 1. 收集可翻译文本
-        let texts = self.text_collector.collect_translatable_texts(&dom.document)?;
-        
+        let texts = self
+            .text_collector
+            .collect_translatable_texts(&dom.document)?;
+
         if texts.is_empty() {
             tracing::info!("没有找到需要翻译的文本");
             return Ok(dom);
@@ -119,7 +121,7 @@ impl EnhancedTranslationService {
         #[cfg(feature = "translation")]
         {
             self.processor.process_batches(batches).await?;
-            
+
             // 获取处理器统计
             let processor_stats = self.processor.get_stats();
             self.stats.successful_batches = processor_stats.successful_batches;
@@ -163,12 +165,14 @@ impl EnhancedTranslationService {
         for cap in content_re.captures_iter(css) {
             if let Some(text_match) = cap.get(1) {
                 let text = text_match.as_str();
-                
+
                 if filter.should_translate(text) {
                     // 尝试从缓存获取
-                    if let Ok(Some(cached)) = self.cache_manager.get_translation(
-                        text, "auto", &self.get_target_language().await?
-                    ).await {
+                    if let Ok(Some(cached)) = self
+                        .cache_manager
+                        .get_translation(text, "auto", &self.get_target_language().await?)
+                        .await
+                    {
                         let full_match = cap.get(0).unwrap().as_str();
                         let translated_rule = full_match.replace(text, &cached);
                         result = result.replace(full_match, &translated_rule);
@@ -179,9 +183,15 @@ impl EnhancedTranslationService {
                     match self.base_service.translate(text).await {
                         Ok(translated) => {
                             // 缓存结果
-                            let _ = self.cache_manager.set_translation(
-                                text, "auto", &self.get_target_language().await?, &translated
-                            ).await;
+                            let _ = self
+                                .cache_manager
+                                .set_translation(
+                                    text,
+                                    "auto",
+                                    &self.get_target_language().await?,
+                                    &translated,
+                                )
+                                .await;
 
                             let full_match = cap.get(0).unwrap().as_str();
                             let translated_rule = full_match.replace(text, &translated);
@@ -201,7 +211,7 @@ impl EnhancedTranslationService {
     /// 翻译单个文本
     pub async fn translate_text(&mut self, text: &str) -> TranslationResult<String> {
         let filter = TextFilter::new();
-        
+
         if !filter.should_translate(text) {
             return Ok(text.to_string());
         }
@@ -209,9 +219,13 @@ impl EnhancedTranslationService {
         #[cfg(feature = "translation")]
         {
             let target_lang = self.get_target_language().await?;
-            
+
             // 尝试从缓存获取
-            if let Ok(Some(cached)) = self.cache_manager.get_translation(text, "auto", &target_lang).await {
+            if let Ok(Some(cached)) = self
+                .cache_manager
+                .get_translation(text, "auto", &target_lang)
+                .await
+            {
                 return Ok(cached);
             }
 
@@ -219,10 +233,13 @@ impl EnhancedTranslationService {
             match self.base_service.translate(text).await {
                 Ok(translated) => {
                     // 缓存结果
-                    let _ = self.cache_manager.set_translation(text, "auto", &target_lang, &translated).await;
+                    let _ = self
+                        .cache_manager
+                        .set_translation(text, "auto", &target_lang, &translated)
+                        .await;
                     Ok(translated)
                 }
-                Err(e) => Err(TranslationError::TranslationServiceError(e.to_string()))
+                Err(e) => Err(TranslationError::TranslationServiceError(e.to_string())),
             }
         }
 
@@ -238,16 +255,7 @@ impl EnhancedTranslationService {
         Ok(config.base.target_lang)
     }
 
-    /// 设置Redis缓存
-    #[cfg(feature = "web")]
-    pub fn set_redis_cache(&mut self, redis_cache: crate::redis_cache::RedisCache) {
-        self.cache_manager.set_redis_cache(redis_cache);
-    }
-    
-    #[cfg(not(feature = "web"))]
-    pub fn set_redis_cache(&mut self, _redis_cache: ()) {
-        // No-op when web feature is not enabled
-    }
+    // Redis缓存功能已被移除
 
     /// 重新加载配置
     pub async fn reload_config(&mut self) -> TranslationResult<bool> {
@@ -270,10 +278,10 @@ impl EnhancedTranslationService {
         let batch_stats = self.batch_manager.get_stats().clone();
         let cache_stats = self.cache_manager.get_stats().clone();
         let cache_info = self.cache_manager.get_cache_info().await;
-        
+
         #[cfg(feature = "translation")]
         let processor_stats = Some(self.processor.get_stats().clone());
-        
+
         #[cfg(not(feature = "translation"))]
         let processor_stats = None;
 
@@ -297,10 +305,14 @@ impl EnhancedTranslationService {
         // 检查配置
         match self.config_manager.get_config() {
             Ok(_) => {
-                status.components.insert("config".to_string(), HealthLevel::Healthy);
+                status
+                    .components
+                    .insert("config".to_string(), HealthLevel::Healthy);
             }
             Err(_) => {
-                status.components.insert("config".to_string(), HealthLevel::Unhealthy);
+                status
+                    .components
+                    .insert("config".to_string(), HealthLevel::Unhealthy);
                 status.overall = HealthLevel::Degraded;
             }
         }
@@ -308,24 +320,32 @@ impl EnhancedTranslationService {
         // 检查缓存
         let cache_info = self.cache_manager.get_cache_info().await;
         if cache_info.hit_rate < 0.1 && cache_info.total_entries > 100 {
-            status.components.insert("cache".to_string(), HealthLevel::Degraded);
+            status
+                .components
+                .insert("cache".to_string(), HealthLevel::Degraded);
             if status.overall == HealthLevel::Healthy {
                 status.overall = HealthLevel::Degraded;
             }
         } else {
-            status.components.insert("cache".to_string(), HealthLevel::Healthy);
+            status
+                .components
+                .insert("cache".to_string(), HealthLevel::Healthy);
         }
 
         // 检查翻译服务
         #[cfg(feature = "translation")]
         {
             // 这里可以添加对基础翻译服务的健康检查
-            status.components.insert("translation".to_string(), HealthLevel::Healthy);
+            status
+                .components
+                .insert("translation".to_string(), HealthLevel::Healthy);
         }
 
         #[cfg(not(feature = "translation"))]
         {
-            status.components.insert("translation".to_string(), HealthLevel::Unhealthy);
+            status
+                .components
+                .insert("translation".to_string(), HealthLevel::Unhealthy);
             status.overall = HealthLevel::Unhealthy;
         }
 
@@ -421,8 +441,10 @@ pub async fn translate_css_content(
     let config = crate::translation::config::ConfigManager::default_config();
     let mut service = EnhancedTranslationService::new(config)
         .map_err(|e| crate::core::MonolithError::new(&e.to_string()))?;
-    
-    service.translate_css(css).await
+
+    service
+        .translate_css(css)
+        .await
         .map_err(|e| crate::core::MonolithError::new(&e.to_string()))
 }
 

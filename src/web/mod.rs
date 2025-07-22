@@ -4,8 +4,10 @@
 
 pub mod config;
 pub mod handlers;
+pub mod library;
 pub mod routes;
 pub mod templates;
+pub mod theme;
 pub mod types;
 
 pub use config::*;
@@ -40,38 +42,49 @@ impl WebServer {
     /// 启动 Web 服务器
     #[cfg(feature = "web")]
     pub async fn start(&self) -> Result<(), MonolithError> {
-        use crate::redis_cache::RedisCache;
+        use mongodb::Client as MongoClient;
+        use crate::web::types::CachedHtml;
 
-        // 初始化 Redis 缓存
-        let redis_cache = if let Some(ref redis_config) = self.config.redis_config {
-            match RedisCache::new(redis_config.clone()) {
-                Ok(cache) => {
-                    match cache.test_connection() {
+        // 初始化 MongoDB 连接
+        let (mongo_client, mongo_collection, mongo_database) = if let Some(ref mongo_config) = self.config.mongo_config {
+            match MongoClient::with_uri_str(&mongo_config.connection_string).await {
+                Ok(client) => {
+                    let database = client.database(&mongo_config.database_name);
+                    let collection = database.collection::<CachedHtml>(&mongo_config.collection_name);
+                    
+                    // 测试连接
+                    match client.list_database_names().await {
                         Ok(_) => {
-                            println!("Redis 缓存连接成功: {}", redis_config.url);
-                            Some(cache)
-                        }
+                            println!("MongoDB 连接成功: {}", mongo_config.connection_string);
+                            (Some(client), Some(collection), Some(database))
+                        },
                         Err(e) => {
-                            eprintln!("警告: Redis 连接失败: {}", e);
+                            eprintln!("警告: MongoDB 连接失败: {}", e);
                             eprintln!("继续运行，但缓存功能将不可用");
-                            None
+                            (None, None, None)
                         }
                     }
-                }
+                },
                 Err(e) => {
-                    eprintln!("警告: 无法初始化 Redis 缓存: {}", e);
+                    eprintln!("警告: 无法初始化 MongoDB 客户端: {}", e);
                     eprintln!("继续运行，但缓存功能将不可用");
-                    None
+                    (None, None, None)
                 }
             }
         } else {
-            println!("未配置 Redis 缓存");
-            None
+            println!("未配置 MongoDB 缓存");
+            (None, None, None)
         };
 
+        // 初始化主题管理器
+        let theme_manager = std::sync::Mutex::new(theme::ThemeManager::new());
+        
         let app_state = Arc::new(AppState {
             monolith_options: self.monolith_options.clone(),
-            redis_cache,
+            mongo_client,
+            mongo_collection,
+            mongo_database,
+            theme_manager: Arc::new(theme_manager),
         });
 
         let app = create_router(app_state, &self.config);

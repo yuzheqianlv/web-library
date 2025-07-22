@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::url::Url;
+use crate::utils::url::Url;
 
 pub struct Cookie {
     pub domain: String,

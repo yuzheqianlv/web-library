@@ -83,7 +83,7 @@ impl Batch {
         }
 
         let max_priority = items.iter().map(|item| item.priority).max().unwrap();
-        
+
         match max_priority {
             TextPriority::Critical => BatchPriority::Critical,
             TextPriority::High => BatchPriority::High,
@@ -103,7 +103,7 @@ impl Batch {
         let base_time = Duration::from_millis(100); // 基础时间
         let char_time = Duration::from_millis(total_chars as u64 / 10); // 每10个字符1ms
         let item_time = Duration::from_millis(items.len() as u64 * 5); // 每个项目5ms
-        
+
         base_time + char_time + item_time
     }
 
@@ -133,7 +133,7 @@ impl Batch {
         self.priority = self.priority.max(other.priority);
         self.estimated_chars += other.estimated_chars;
         self.estimated_duration += other.estimated_duration;
-        
+
         // 更新批次类型
         if self.estimated_chars > constants::MAX_BATCH_SIZE * 8 / 10 {
             self.batch_type = BatchType::Large;
@@ -159,7 +159,7 @@ impl Batch {
 
         for item in self.items {
             let item_size = item.char_count();
-            
+
             if current_size + item_size > max_size && !current_items.is_empty() {
                 // 创建新批次
                 batches.push(Batch::new(
@@ -331,7 +331,12 @@ impl BatchManager {
         let mut priority_groups = self.group_by_priority(items);
 
         // 按优先级处理
-        for priority in [BatchPriority::Critical, BatchPriority::High, BatchPriority::Normal, BatchPriority::Low] {
+        for priority in [
+            BatchPriority::Critical,
+            BatchPriority::High,
+            BatchPriority::Normal,
+            BatchPriority::Low,
+        ] {
             if let Some(items) = priority_groups.remove(&priority) {
                 let mut priority_batches = self.create_batches_for_priority(items, priority);
                 batches.append(&mut priority_batches);
@@ -359,7 +364,11 @@ impl BatchManager {
     }
 
     /// 为特定优先级创建批次
-    fn create_batches_for_priority(&mut self, items: Vec<TextItem>, _priority: BatchPriority) -> Vec<Batch> {
+    fn create_batches_for_priority(
+        &mut self,
+        items: Vec<TextItem>,
+        _priority: BatchPriority,
+    ) -> Vec<Batch> {
         let mut batches = Vec::new();
         let mut current_batch = Vec::new();
         let mut current_size = 0;
@@ -442,7 +451,8 @@ impl BatchManager {
     ) -> bool {
         !current_batch.is_empty()
             && (current_size + item_size > self.config.max_batch_size)
-            && (current_size >= self.config.min_batch_chars || current_size > self.config.max_batch_size * 8 / 10)
+            && (current_size >= self.config.min_batch_chars
+                || current_size > self.config.max_batch_size * 8 / 10)
     }
 
     /// 完成当前批次
@@ -614,7 +624,8 @@ impl BatchStats {
         if self.input_items == 0 {
             0.0
         } else {
-            let optimal_batches = (self.input_items as f32 / constants::MAX_BATCH_SIZE as f32).ceil();
+            let optimal_batches =
+                (self.input_items as f32 / constants::MAX_BATCH_SIZE as f32).ceil();
             optimal_batches / self.output_batches as f32
         }
     }
@@ -683,7 +694,9 @@ impl BatchQueue {
             normal_priority_count: self.normal_priority.len(),
             low_priority_count: self.low_priority.len(),
             processing_count: self.processing.len(),
-            total_queued: self.high_priority.len() + self.normal_priority.len() + self.low_priority.len(),
+            total_queued: self.high_priority.len()
+                + self.normal_priority.len()
+                + self.low_priority.len(),
         }
     }
 

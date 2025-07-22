@@ -16,8 +16,6 @@ use crate::core::{create_monolithic_document, MonolithError};
 use crate::session::Session;
 use crate::web::types::{AppState, TranslateRequest, TranslateResponse};
 
-#[cfg(feature = "web")]
-use crate::redis_cache::create_cached_translation;
 
 /// 翻译 URL 处理器
 #[cfg(feature = "web")]
@@ -26,12 +24,20 @@ pub async fn translate_url(
     ExtractJson(request): ExtractJson<TranslateRequest>,
 ) -> Result<Json<TranslateResponse>, (StatusCode, Json<serde_json::Value>)> {
     let url = request.url.clone();
-    let target_lang = request.target_lang.unwrap_or_else(|| "zh".to_string());
-    let source_lang = request.source_lang.unwrap_or_else(|| "auto".to_string());
+    let target_lang = request.target_lang.clone().unwrap_or_else(|| "zh".to_string());
+    let source_lang = request.source_lang.clone().unwrap_or_else(|| "auto".to_string());
 
-    // 检查缓存
-    if let Some(ref cache) = state.redis_cache {
-        if let Ok(Some(cached)) = cache.get(&url, &source_lang, &target_lang) {
+    // 检查MongoDB缓存
+    if let Some(ref collection) = state.mongo_collection {
+        use mongodb::bson::doc;
+        
+        let filter = doc! {
+            "url": &url,
+            "source_lang": &source_lang,
+            "target_lang": &target_lang
+        };
+        
+        if let Ok(Some(cached)) = collection.find_one(filter).await {
             let response = TranslateResponse {
                 original_html: cached.original_html,
                 translated_html: cached.translated_html,
@@ -59,51 +65,59 @@ pub async fn translate_url(
     let translated_future = {
         let url = url.clone();
         let options = options_translated;
-        let target_lang = target_lang.clone();
-        task::spawn_blocking(move || -> Result<(Vec<u8>, Option<String>), MonolithError> {
-            // 先获取原始内容
-            let session = Session::new(None, None, options.clone());
-            let original_result = create_monolithic_document(session, url.clone())?;
+        let _target_lang = target_lang.clone();
+        task::spawn_blocking(
+            move || -> Result<(Vec<u8>, Option<String>), MonolithError> {
+                // 先获取原始内容
+                let session = Session::new(None, None, options.clone());
+                let original_result = create_monolithic_document(session, url.clone())?;
 
-            // 如果启用了翻译功能，进行翻译
-            #[cfg(feature = "translation")]
-            {
-                use crate::html::{html_to_dom, serialize_document};
-                use crate::translation::{translate_dom_content, load_translation_config};
+                // 如果启用了翻译功能，进行翻译
+                #[cfg(feature = "translation")]
+                {
+                    use crate::html::{html_to_dom, serialize_document};
+                    use crate::translation::{load_translation_config, translate_dom_content};
 
-                let (original_data, title) = original_result;
-                let dom = html_to_dom(&original_data, url);
-                
-                // 加载翻译配置，从配置文件加载 API URL
-                let translation_config = load_translation_config(&target_lang, None);
-                
-                // 翻译需要在异步上下文中运行，这里简化处理
-                let translated_dom = tokio::runtime::Handle::current()
-                    .block_on(translate_dom_content(dom, &target_lang, Some(&translation_config.deeplx_api_url)))
-                    .map_err(|e| MonolithError::new(&format!("Translation error: {}", e)))?;
-                
-                let translated_data = serialize_document(translated_dom, "UTF-8".to_string(), &options);
-                Ok((translated_data, title))
-            }
-            
-            #[cfg(not(feature = "translation"))]
-            Ok(original_result)
-        })
+                    let (original_data, title) = original_result;
+                    let dom = html_to_dom(&original_data, url);
+
+                    // 加载翻译配置，从配置文件加载 API URL
+                    let translation_config = load_translation_config(&target_lang, None);
+
+                    // 翻译需要在异步上下文中运行，这里简化处理
+                    let translated_dom = tokio::runtime::Handle::current()
+                        .block_on(translate_dom_content(
+                            dom,
+                            &target_lang,
+                            Some(&translation_config.deeplx_api_url),
+                        ))
+                        .map_err(|e| MonolithError::new(&format!("Translation error: {}", e)))?;
+
+                    let translated_data =
+                        serialize_document(translated_dom, "UTF-8".to_string(), &options);
+                    Ok((translated_data, title))
+                }
+
+                #[cfg(not(feature = "translation"))]
+                Ok(original_result)
+            },
+        )
     };
 
     // 等待两个任务完成
-    let (original_result, translated_result) = match tokio::try_join!(original_future, translated_future) {
-        Ok((original, translated)) => (original, translated),
-        Err(e) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": true,
-                    "message": format!("Task execution error: {}", e)
-                }))
-            ));
-        }
-    };
+    let (original_result, translated_result) =
+        match tokio::try_join!(original_future, translated_future) {
+            Ok((original, translated)) => (original, translated),
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": true,
+                        "message": format!("Task execution error: {}", e)
+                    })),
+                ));
+            }
+        };
 
     let (original_data, original_title) = match original_result {
         Ok(result) => result,
@@ -113,7 +127,7 @@ pub async fn translate_url(
                 Json(serde_json::json!({
                     "error": true,
                     "message": format!("Failed to process original: {}", e)
-                }))
+                })),
             ));
         }
     };
@@ -126,7 +140,7 @@ pub async fn translate_url(
                 Json(serde_json::json!({
                     "error": true,
                     "message": format!("Failed to process translation: {}", e)
-                }))
+                })),
             ));
         }
     };
@@ -137,20 +151,22 @@ pub async fn translate_url(
     // 使用标题
     let title = translated_title.or(original_title);
 
-    // 缓存结果
-    if let Some(ref cache) = state.redis_cache {
-        let cached_translation = create_cached_translation(
-            url,
-            original_html.clone(),
-            translated_html.clone(),
-            title.clone(),
-            source_lang,
-            target_lang,
-            None, // 使用默认 TTL
-        );
+    // 缓存结果到MongoDB
+    if let Some(ref collection) = state.mongo_collection {
+        use crate::web::types::CachedHtml;
         
-        if let Err(e) = cache.set(&cached_translation) {
-            eprintln!("警告: 缓存存储失败: {}", e);
+        let cached_html = CachedHtml {
+            url: request.url.clone(),
+            original_html: original_html.clone(),
+            translated_html: translated_html.clone(),
+            title: title.clone(),
+            source_lang: request.source_lang.unwrap_or_else(|| "auto".to_string()),
+            target_lang: request.target_lang.unwrap_or_else(|| "zh".to_string()),
+            created_at: bson::DateTime::now(),
+        };
+
+        if let Err(e) = collection.insert_one(cached_html).await {
+            eprintln!("警告: MongoDB缓存存储失败: {}", e);
         }
     }
 

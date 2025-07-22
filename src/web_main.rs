@@ -10,7 +10,7 @@ use monolith::web::{WebConfig, WebServer};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 初始化日志
     tracing_subscriber::fmt::init();
-    
+
     // 初始化翻译配置系统（这会加载 .env 文件）
     #[cfg(feature = "translation")]
     {
@@ -21,12 +21,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tracing::info!("翻译配置系统初始化成功");
         }
     }
-    
+
     // 解析命令行参数
     let args: Vec<String> = std::env::args().collect();
 
-    let mut bind_addr = "127.0.0.1".to_string();
-    let mut port = 7080u16;
+    let mut bind_addr = std::env::var("WEB_BIND_ADDRESS")
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let mut port = std::env::var("WEB_PORT")
+        .unwrap_or_else(|_| "7080".to_string())
+        .parse::<u16>()
+        .unwrap_or(7080);
 
     // 简单的命令行参数解析
     let mut i = 1;
@@ -75,7 +79,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bind_addr,
         port,
         static_dir: Some("static".to_string()),
-        redis_config: Some(monolith::redis_cache::RedisCacheConfig::default()),
+        #[cfg(feature = "web")]
+        mongo_config: Some(monolith::web::config::MongoConfig::default()),
+        #[cfg(not(feature = "web"))]
+        mongo_config: None,
     };
 
     // 启动 Web 服务器

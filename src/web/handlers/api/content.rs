@@ -36,7 +36,7 @@ pub async fn get_content(
             Json(serde_json::json!({
                 "error": true,
                 "message": format!("Task execution error: {}", e)
-            }))
+            })),
         )
     })?
     .map_err(|e| {
@@ -45,7 +45,7 @@ pub async fn get_content(
             Json(serde_json::json!({
                 "error": true,
                 "message": format!("Failed to process content: {}", e)
-            }))
+            })),
         )
     })?;
 

@@ -5,13 +5,13 @@ use std::process;
 use clap::Parser;
 use tempfile::{Builder, NamedTempFile};
 
-use monolith::cache::Cache;
-use monolith::cookies::{parse_cookie_file_contents, Cookie};
 use monolith::core::{
     create_monolithic_document, create_monolithic_document_from_data, format_output_path,
     print_error_message, MonolithOptions, MonolithOutputFormat,
 };
-use monolith::session::Session;
+use monolith::network::cache::Cache;
+use monolith::network::cookies::{parse_cookie_file_contents, Cookie};
+use monolith::network::session::Session;
 
 const ASCII: &str = " \
  _____    _____________   __________     ___________________    ___
@@ -240,13 +240,13 @@ fn main() {
                     }
                 }
             }
-            
+
             // 如果没有指定target且不是生成配置，则报错
             if cli.target.is_none() && !cli.generate_config {
                 eprintln!("Error: TARGET is required unless using --generate-config");
                 process::exit(1);
             }
-            
+
             options.enable_translation = cli.translate;
             options.target_language = cli.target_lang;
             options.translation_api_url = cli.translation_api;

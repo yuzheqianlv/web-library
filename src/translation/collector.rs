@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use markup5ever_rcdom::{Handle, NodeData};
 use html5ever::tendril;
+use markup5ever_rcdom::{Handle, NodeData};
 
 // #[cfg(feature = "translation")]
 // use rayon::prelude::*;
@@ -216,8 +216,14 @@ impl Default for CollectorConfig {
         Self {
             enable_parallel: true,
             max_depth: 50,
-            skip_elements: constants::SKIP_ELEMENTS.iter().map(|s| s.to_string()).collect(),
-            collect_attributes: constants::TRANSLATABLE_ATTRS.iter().map(|s| s.to_string()).collect(),
+            skip_elements: constants::SKIP_ELEMENTS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            collect_attributes: constants::TRANSLATABLE_ATTRS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             min_text_length: constants::MIN_TEXT_LENGTH,
             enable_priority_sorting: true,
         }
@@ -247,11 +253,14 @@ impl TextCollector {
     }
 
     /// 收集可翻译文本
-    pub fn collect_translatable_texts(&mut self, root: &Handle) -> TranslationResult<Vec<TextItem>> {
+    pub fn collect_translatable_texts(
+        &mut self,
+        root: &Handle,
+    ) -> TranslationResult<Vec<TextItem>> {
         let mut texts = Vec::new();
-        
+
         self.stats.reset();
-        
+
         #[cfg(feature = "translation")]
         {
             if self.config.enable_parallel {
@@ -260,7 +269,7 @@ impl TextCollector {
                 self.collect_recursive(root, &mut texts, 0);
             }
         }
-        
+
         #[cfg(not(feature = "translation"))]
         {
             self.collect_recursive(root, &mut texts, 0);
@@ -284,7 +293,7 @@ impl TextCollector {
             }
             NodeData::Element { ref name, .. } => {
                 let tag_name = name.local.as_ref();
-                
+
                 if self.should_skip_element(tag_name) {
                     self.stats.nodes_skipped += 1;
                     return;
@@ -309,7 +318,11 @@ impl TextCollector {
 
     /// 并行收集文本（实验性功能）
     #[cfg(feature = "translation")]
-    fn collect_parallel(&mut self, root: &Handle, texts: &mut Vec<TextItem>) -> TranslationResult<()> {
+    fn collect_parallel(
+        &mut self,
+        root: &Handle,
+        texts: &mut Vec<TextItem>,
+    ) -> TranslationResult<()> {
         // 首先收集所有节点
         let mut all_nodes = Vec::new();
         self.collect_all_nodes(root, &mut all_nodes, 0);
@@ -392,9 +405,9 @@ impl TextCollector {
         depth: usize,
     ) {
         let text = contents.borrow().to_string();
-        
+
         self.stats.text_nodes_found += 1;
-        
+
         if self.filter.should_translate(&text) {
             texts.push(TextItem::content(text, node.clone(), depth));
             self.stats.translatable_texts += 1;
@@ -404,11 +417,16 @@ impl TextCollector {
     }
 
     /// 收集元素属性
-    fn collect_element_attributes(&mut self, node: &Handle, texts: &mut Vec<TextItem>, depth: usize) {
+    fn collect_element_attributes(
+        &mut self,
+        node: &Handle,
+        texts: &mut Vec<TextItem>,
+        depth: usize,
+    ) {
         for attr_name in &self.config.collect_attributes {
             if let Some(attr_value) = get_node_attr(node, attr_name) {
                 self.stats.attributes_found += 1;
-                
+
                 if self.filter.should_translate(&attr_value) {
                     texts.push(TextItem::attribute(
                         attr_value,
@@ -430,7 +448,10 @@ impl TextCollector {
     }
 
     /// 过滤和排序文本
-    fn filter_and_sort_texts(&mut self, mut texts: Vec<TextItem>) -> TranslationResult<Vec<TextItem>> {
+    fn filter_and_sort_texts(
+        &mut self,
+        mut texts: Vec<TextItem>,
+    ) -> TranslationResult<Vec<TextItem>> {
         // 按文本长度过滤
         texts.retain(|item| item.text.len() >= self.config.min_text_length);
 
@@ -454,7 +475,7 @@ impl TextCollector {
 
         for item in texts {
             let key = (item.text.clone(), item.text_type.clone());
-            
+
             if let Some(existing) = seen.get(&key) {
                 // 如果已存在，保留优先级更高的
                 if item.priority > *existing {
@@ -507,22 +528,25 @@ impl TextCollector {
     /// 按类型分组文本
     pub fn group_by_type<'a>(&self, texts: &'a [TextItem]) -> HashMap<TextType, Vec<&'a TextItem>> {
         let mut groups: HashMap<TextType, Vec<&'a TextItem>> = HashMap::new();
-        
+
         for item in texts {
             groups.entry(item.text_type.clone()).or_default().push(item);
         }
-        
+
         groups
     }
 
     /// 按优先级分组文本
-    pub fn group_by_priority<'a>(&self, texts: &'a [TextItem]) -> HashMap<TextPriority, Vec<&'a TextItem>> {
+    pub fn group_by_priority<'a>(
+        &self,
+        texts: &'a [TextItem],
+    ) -> HashMap<TextPriority, Vec<&'a TextItem>> {
         let mut groups: HashMap<TextPriority, Vec<&'a TextItem>> = HashMap::new();
-        
+
         for item in texts {
             groups.entry(item.priority).or_default().push(item);
         }
-        
+
         groups
     }
 }
@@ -629,13 +653,18 @@ impl AdvancedTextCollector {
 /// 便利函数：收集可翻译文本
 pub fn collect_translatable_texts(root: &Handle) -> Vec<TextItem> {
     let mut collector = TextCollector::default();
-    collector.collect_translatable_texts(root).unwrap_or_default()
+    collector
+        .collect_translatable_texts(root)
+        .unwrap_or_default()
 }
 
 /// 便利函数：收集指定类型的文本
 pub fn collect_texts_by_type(root: &Handle, text_type: TextType) -> Vec<TextItem> {
     let texts = collect_translatable_texts(root);
-    texts.into_iter().filter(|item| item.text_type == text_type).collect()
+    texts
+        .into_iter()
+        .filter(|item| item.text_type == text_type)
+        .collect()
 }
 
 /// 便利函数：收集高优先级文本

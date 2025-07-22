@@ -3,11 +3,13 @@
 pub mod bookmarklet;
 pub mod cache;
 pub mod content;
-pub mod library;
+pub mod library_extras;
+pub mod theme;
 pub mod translation;
 
 pub use bookmarklet::*;
 pub use cache::*;
 pub use content::*;
-pub use library::*;
+pub use library_extras::*;
+pub use theme::*;
 pub use translation::*;

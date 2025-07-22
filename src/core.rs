@@ -10,19 +10,32 @@ use encoding_rs::Encoding;
 use markup5ever_rcdom::RcDom;
 use url::Url;
 
-use crate::html::{
+use crate::network::session::Session;
+use crate::parsers::html::{
     add_favicon, create_metadata_tag, get_base_url, get_charset, get_robots, get_title,
     has_favicon, html_to_dom, serialize_document, set_base_url, set_charset, set_robots, walk,
 };
-use crate::session::Session;
-use crate::url::{create_data_url, resolve_url};
+use crate::utils::url::{create_data_url, resolve_url};
 
+/// Represents errors that can occur during monolith processing
+///
+/// This error type encapsulates all possible errors that can occur
+/// when processing a document with the monolith library.
 #[derive(Debug)]
 pub struct MonolithError {
     details: String,
 }
 
 impl MonolithError {
+    /// Creates a new MonolithError with the given message
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The error message describing what went wrong
+    ///
+    /// # Returns
+    ///
+    /// A new MonolithError instance
     pub fn new(msg: &str) -> MonolithError {
         MonolithError {
             details: msg.to_string(),
@@ -42,16 +55,26 @@ impl Error for MonolithError {
     }
 }
 
+/// Supported output formats for monolithic documents
+///
+/// This enum defines the available output formats for processed documents.
+/// HTML is the default format.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum MonolithOutputFormat {
+    /// Standard HTML format (default)
     #[default]
     HTML,
+    /// MHTML format for email compatibility
     MHTML,
     // WARC,
     // ZIM,
     // HAR,
 }
 
+/// Configuration options for monolith processing
+///
+/// This struct contains all the configuration options that control
+/// how a document is processed and what assets are included or excluded.
 #[derive(Default, Clone)]
 pub struct MonolithOptions {
     pub base_url: Option<String>,
@@ -120,6 +143,39 @@ const PLAINTEXT_MEDIA_TYPES: &[&str] = &[
     "image/svg+xml",                   // .svg
 ];
 
+/// Creates a monolithic document from raw data
+///
+/// Processes raw HTML data and creates a self-contained document with all assets embedded.
+///
+/// # Arguments
+///
+/// * `session` - The session containing configuration and cache
+/// * `input_data` - Raw HTML data as bytes
+/// * `input_encoding` - Optional character encoding (defaults to UTF-8)
+/// * `input_target` - Optional target URL for resolving relative links
+///
+/// # Returns
+///
+/// Returns a tuple containing the processed document bytes and optional title,
+/// or an error if processing fails.
+///
+/// # Examples
+///
+/// ```
+/// use monolith::core::{create_monolithic_document_from_data, MonolithOptions};
+/// use monolith::session::Session;
+///
+/// let options = MonolithOptions::default();
+/// let session = Session::new(None, None, options);
+/// let html = b"<html><body>Hello World</body></html>";
+///
+/// let result = create_monolithic_document_from_data(
+///     session,
+///     html.to_vec(),
+///     None,
+///     None
+/// );
+/// ```
 pub fn create_monolithic_document_from_data(
     mut session: Session,
     input_data: Vec<u8>,
@@ -195,8 +251,7 @@ pub fn create_monolithic_document_from_data(
                             }
                             Err(_) => {
                                 return Err(MonolithError::new(&format!(
-                                    "could not map given path to base URL \"{}\"",
-                                    custom_base_url
+                                    "could not map given path to base URL \"{custom_base_url}\""
                                 )));
                             }
                         }
@@ -214,13 +269,13 @@ pub fn create_monolithic_document_from_data(
     {
         if session.options.enable_translation {
             use crate::translation::translate_dom_content_sync;
-            
+
             dom = translate_dom_content_sync(
-                dom, 
+                dom,
                 session.options.target_language.as_deref().unwrap_or("zh"),
-                session.options.translation_api_url.as_deref()
+                session.options.translation_api_url.as_deref(),
             )?;
-            
+
             if !session.options.silent {
                 println!("Translation completed");
             }
@@ -321,6 +376,35 @@ Content-Location: http://example.com/\r\n\
     }
 }
 
+/// Creates a monolithic document from a URL or file path
+///
+/// Downloads and processes a web page or local file, creating a self-contained
+/// document with all assets embedded.
+///
+/// # Arguments
+///
+/// * `session` - The session containing configuration and cache
+/// * `target` - URL or file path to process
+///
+/// # Returns
+///
+/// Returns a tuple containing the processed document bytes and optional title,
+/// or an error if processing fails.
+///
+/// # Examples
+///
+/// ```
+/// use monolith::core::{create_monolithic_document, MonolithOptions};
+/// use monolith::session::Session;
+///
+/// let options = MonolithOptions::default();
+/// let session = Session::new(None, None, options);
+///
+/// let result = create_monolithic_document(
+///     session,
+///     "https://example.com".to_string()
+/// );
+/// ```
 pub fn create_monolithic_document(
     mut session: Session,
     target: String,
@@ -349,8 +433,7 @@ pub fn create_monolithic_document(
                 "data" | "file" | "http" | "https" => target_url,
                 unsupported_scheme => {
                     return Err(MonolithError::new(&format!(
-                        "unsupported target URL scheme \"{}\"",
-                        unsupported_scheme
+                        "unsupported target URL scheme \"{unsupported_scheme}\""
                     )));
                 }
             },
@@ -542,8 +625,7 @@ pub fn parse_content_type(content_type: &str) -> (String, String, bool) {
 
     // Parse meta data
     let content_type_items: Vec<&str> = content_type.split(';').collect();
-    let mut i: i8 = 0;
-    for item in &content_type_items {
+    for (i, item) in (0_i8..).zip(content_type_items.iter()) {
         if i == 0 {
             if !item.trim().is_empty() {
                 media_type = item.trim().to_string();
@@ -553,8 +635,6 @@ pub fn parse_content_type(content_type: &str) -> (String, String, bool) {
         } else if item.trim().starts_with("charset=") {
             charset = item.trim().chars().skip(8).collect();
         }
-
-        i += 1;
     }
 
     (media_type, charset, is_base64)

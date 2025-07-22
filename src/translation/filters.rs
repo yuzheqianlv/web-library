@@ -125,7 +125,8 @@ impl TextFilter {
     /// 检查是否为URL
     fn is_url(&self, text: &str) -> bool {
         // 简单的URL检查
-        if text.starts_with("http://") || text.starts_with("https://") || text.starts_with("ftp://") {
+        if text.starts_with("http://") || text.starts_with("https://") || text.starts_with("ftp://")
+        {
             return true;
         }
 
@@ -294,7 +295,7 @@ impl TextFilter {
     /// 高级文本分析
     pub fn analyze_text(&self, text: &str) -> TextAnalysis {
         let trimmed = text.trim();
-        
+
         TextAnalysis {
             original_text: text.to_string(),
             trimmed_text: trimmed.to_string(),
@@ -334,10 +335,7 @@ impl TextFilter {
             .filter(|c| ('\u{ac00}'..='\u{d7af}').contains(c))
             .count();
 
-        let latin_chars = text
-            .chars()
-            .filter(|c| c.is_ascii_alphabetic())
-            .count();
+        let latin_chars = text.chars().filter(|c| c.is_ascii_alphabetic()).count();
 
         let total_chars = text.chars().count();
 
@@ -416,7 +414,7 @@ impl FilterStats {
     /// 记录过滤结果
     pub fn record_filter(&mut self, should_translate: bool, reason: Option<FilterReason>) {
         self.total_texts += 1;
-        
+
         if should_translate {
             self.translatable_texts += 1;
         } else {
@@ -470,7 +468,7 @@ impl AdvancedTextFilter {
     /// 使用所有规则过滤文本
     pub fn should_translate(&mut self, text: &str) -> bool {
         let base_result = self.base_filter.should_translate(text);
-        
+
         // 应用自定义规则
         let custom_result = if base_result {
             self.custom_rules.iter().all(|rule| rule(text))

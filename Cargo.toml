@@ -46,9 +46,9 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros"], optional = 
 # Web server dependencies
 axum = { version = "0.7", optional = true } # Web framework
 tower-http = { version = "0.5", features = ["fs", "cors"], optional = true } # HTTP middleware
-# Redis dependencies
-redis = { version = "0.24", optional = true } # Redis client
-uuid = { version = "1.0", features = ["v4"], optional = true } # UUID generation
+# MongoDB dependencies
+mongodb = { version = "3.1", optional = true } # MongoDB client
+bson = { version = "2.13", features = ["chrono-0_4"], optional = true } # BSON serialization
 # Translation system dependencies
 tracing = { version = "0.1", optional = true } # Logging and monitoring
 tracing-subscriber = { version = "0.3", optional = true } # Logging subscriber
@@ -63,6 +63,7 @@ rayon = { version = "1.8", optional = true } # Data parallelism library
 tower = { version = "0.4", optional = true } # Service trait and utilities
 metrics = { version = "0.22", optional = true } # Metrics collection framework
 dotenv = { version = "0.15", optional = true } # .env file support
+futures = { version = "0.3", optional = true } # Async stream utilities
 
 # Used for unwrapping NOSCRIPT
 [dependencies.regex]
@@ -111,10 +112,11 @@ web = [
     "tokio",
     "serde",
     "serde_json",
-    "redis",
-    "uuid",
+    "mongodb",
+    "bson",
     "tracing",
     "tracing-subscriber",
+    "futures",
 ] # Enable web server functionality
 vendored-openssl = [
     "openssl/vendored",

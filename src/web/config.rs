@@ -1,7 +1,30 @@
 //! Web 服务器配置
 
+/// MongoDB 配置
 #[cfg(feature = "web")]
-use crate::redis_cache::RedisCacheConfig;
+#[derive(Debug, Clone)]
+pub struct MongoConfig {
+    /// MongoDB 连接字符串
+    pub connection_string: String,
+    /// 数据库名称
+    pub database_name: String,
+    /// 集合名称
+    pub collection_name: String,
+}
+
+#[cfg(feature = "web")]
+impl Default for MongoConfig {
+    fn default() -> Self {
+        Self {
+            connection_string: std::env::var("MONGODB_URL")
+                .unwrap_or_else(|_| "mongodb://localhost:27017".to_string()),
+            database_name: std::env::var("MONGODB_DATABASE")
+                .unwrap_or_else(|_| "monolith".to_string()),
+            collection_name: std::env::var("MONGODB_COLLECTION")
+                .unwrap_or_else(|_| "html_cache".to_string()),
+        }
+    }
+}
 
 /// Web 服务器配置
 #[derive(Debug, Clone)]
@@ -12,11 +35,11 @@ pub struct WebConfig {
     pub port: u16,
     /// 静态文件目录
     pub static_dir: Option<String>,
-    /// Redis 缓存配置
+    /// MongoDB 配置
     #[cfg(feature = "web")]
-    pub redis_config: Option<RedisCacheConfig>,
+    pub mongo_config: Option<MongoConfig>,
     #[cfg(not(feature = "web"))]
-    pub redis_config: Option<()>,
+    pub mongo_config: Option<()>,
 }
 
 impl Default for WebConfig {
@@ -26,9 +49,9 @@ impl Default for WebConfig {
             port: 7080,
             static_dir: Some("static".to_string()),
             #[cfg(feature = "web")]
-            redis_config: Some(RedisCacheConfig::default()),
+            mongo_config: Some(MongoConfig::default()),
             #[cfg(not(feature = "web"))]
-            redis_config: None,
+            mongo_config: None,
         }
     }
 }

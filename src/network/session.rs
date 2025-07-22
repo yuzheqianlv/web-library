@@ -5,12 +5,12 @@ use std::time::Duration;
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, COOKIE, REFERER, USER_AGENT};
 
-use crate::cache::Cache;
-use crate::cookies::Cookie;
 use crate::core::{
     detect_media_type, parse_content_type, print_error_message, print_info_message, MonolithOptions,
 };
-use crate::url::{clean_url, domain_is_within_domain, get_referer_url, parse_data_url, Url};
+use crate::network::cache::Cache;
+use crate::network::cookies::Cookie;
+use crate::utils::url::{clean_url, domain_is_within_domain, get_referer_url, parse_data_url, Url};
 
 pub struct Session {
     cache: Option<Cache>,

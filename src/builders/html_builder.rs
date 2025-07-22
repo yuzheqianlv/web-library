@@ -1,5 +1,5 @@
 //! HTML 构建器模块
-//! 
+//!
 //! 负责动态构建 HTML 模板，支持内联 CSS/JS 或外部引用
 
 use std::fs;
@@ -40,9 +40,12 @@ impl HtmlBuilder {
     }
 
     /// 构建带预加载 URL 的 HTML 页面
-    pub fn build_index_page_with_url(&self, preload_url: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn build_index_page_with_url(
+        &self,
+        preload_url: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let template_path = Path::new(&self.config.template_dir);
-        
+
         // 读取 CSS 内容
         let css_content = if self.config.inline_assets {
             self.read_css_inline(template_path)?
@@ -115,7 +118,10 @@ impl HtmlBuilder {
 
     /// 生成 CSS 外部链接
     fn get_css_links(&self) -> String {
-        format!(r#"<link rel="stylesheet" href="{}assets/css/main.css">"#, self.config.asset_base_path)
+        format!(
+            r#"<link rel="stylesheet" href="{}assets/css/main.css">"#,
+            self.config.asset_base_path
+        )
     }
 
     /// 读取并内联 JavaScript
@@ -127,7 +133,10 @@ impl HtmlBuilder {
 
     /// 生成 JavaScript 外部引用
     fn get_js_scripts(&self) -> String {
-        format!(r#"<script src="{}assets/js/monolith-translator.js"></script>"#, self.config.asset_base_path)
+        format!(
+            r#"<script src="{}assets/js/monolith-translator.js"></script>"#,
+            self.config.asset_base_path
+        )
     }
 
     /// 获取页面主体内容
@@ -232,12 +241,16 @@ mod tests {
         let template_dir = temp_dir.path().join("templates");
         let css_dir = template_dir.join("assets/css");
         let js_dir = template_dir.join("assets/js");
-        
+
         fs::create_dir_all(&css_dir).unwrap();
         fs::create_dir_all(&js_dir).unwrap();
-        
+
         fs::write(css_dir.join("main.css"), "body { margin: 0; }").unwrap();
-        fs::write(js_dir.join("monolith-translator.js"), "console.log('test');").unwrap();
+        fs::write(
+            js_dir.join("monolith-translator.js"),
+            "console.log('test');",
+        )
+        .unwrap();
 
         let config = HtmlBuilderConfig {
             template_dir: template_dir.to_string_lossy().to_string(),
@@ -247,7 +260,7 @@ mod tests {
 
         let builder = HtmlBuilder::new(config);
         let html = builder.build_index_page().unwrap();
-        
+
         assert!(html.contains("<style>"));
         assert!(html.contains("body { margin: 0; }"));
         assert!(html.contains("<script>"));
@@ -264,8 +277,10 @@ mod tests {
 
         let builder = HtmlBuilder::new(config);
         let html = builder.build_index_page().unwrap();
-        
+
         assert!(html.contains(r#"<link rel="stylesheet" href="/static/assets/css/main.css">"#));
-        assert!(html.contains(r#"<script src="/static/assets/js/monolith-translator.js"></script>"#));
+        assert!(
+            html.contains(r#"<script src="/static/assets/js/monolith-translator.js"></script>"#)
+        );
     }
 }

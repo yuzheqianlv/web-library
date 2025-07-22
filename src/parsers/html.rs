@@ -13,10 +13,10 @@ use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::default::Default;
 
 use crate::core::{parse_content_type, MonolithOptions};
-use crate::css::embed_css;
-use crate::js::attr_is_event_handler;
-use crate::session::Session;
-use crate::url::{
+use crate::network::session::Session;
+use crate::parsers::css::embed_css;
+use crate::parsers::js::attr_is_event_handler;
+use crate::utils::url::{
     clean_url, create_data_url, is_url_and_has_protocol, resolve_url, Url, EMPTY_IMAGE_DATA_URL,
 };
 
@@ -333,7 +333,7 @@ pub fn has_favicon(handle: &Handle) -> bool {
     found_favicon
 }
 
-pub fn html_to_dom(data: &Vec<u8>, document_encoding: String) -> RcDom {
+pub fn html_to_dom(data: &[u8], document_encoding: String) -> RcDom {
     let s: String;
 
     if let Some(encoding) = Encoding::for_label(document_encoding.as_bytes()) {

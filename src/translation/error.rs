@@ -16,55 +16,55 @@ pub enum TranslationError {
     /// 配置错误
     #[error("配置错误: {0}")]
     ConfigError(String),
-    
+
     /// 网络错误
     #[error("网络错误: {0}")]
     NetworkError(String),
-    
+
     /// 速率限制错误
     #[error("请求速率过快，已达到限制")]
     RateLimitExceeded,
-    
+
     /// 输入验证错误
     #[error("输入无效: {0}")]
     InvalidInput(String),
-    
+
     /// 缓存错误
     #[error("缓存错误: {0}")]
     CacheError(String),
-    
+
     /// 批次处理错误
     #[error("批次处理错误: {0}")]
     BatchProcessingError(String),
-    
+
     /// 文本收集错误
     #[error("文本收集错误: {0}")]
     TextCollectionError(String),
-    
+
     /// 翻译服务错误
     #[error("翻译服务错误: {0}")]
     TranslationServiceError(String),
-    
+
     /// 超时错误
     #[error("操作超时: {0}")]
     TimeoutError(String),
-    
+
     /// 解析错误
     #[error("解析错误: {0}")]
     ParseError(String),
-    
+
     /// 序列化错误
     #[error("序列化错误: {0}")]
     SerializationError(String),
-    
+
     /// 并发错误
     #[error("并发操作错误: {0}")]
     ConcurrencyError(String),
-    
+
     /// 资源不足错误
     #[error("资源不足: {0}")]
     ResourceExhausted(String),
-    
+
     /// 内部错误
     #[error("内部错误: {0}")]
     InternalError(String),
@@ -91,7 +91,7 @@ impl TranslationError {
             TranslationError::InternalError(_) => false,
         }
     }
-    
+
     /// 获取错误的严重程度
     pub fn severity(&self) -> ErrorSeverity {
         match self {
@@ -111,7 +111,7 @@ impl TranslationError {
             TranslationError::InternalError(_) => ErrorSeverity::Critical,
         }
     }
-    
+
     /// 获取错误类别
     pub fn category(&self) -> ErrorCategory {
         match self {
@@ -131,12 +131,12 @@ impl TranslationError {
             TranslationError::InternalError(_) => ErrorCategory::Internal,
         }
     }
-    
+
     /// 创建带上下文的错误
     pub fn with_context<T: fmt::Display>(mut self, context: T) -> Self {
         let current_msg = self.to_string();
         let new_msg = format!("{} (上下文: {})", current_msg, context);
-        
+
         match &mut self {
             TranslationError::ConfigError(ref mut msg) => *msg = new_msg,
             TranslationError::NetworkError(ref mut msg) => *msg = new_msg,
@@ -155,7 +155,7 @@ impl TranslationError {
                 return TranslationError::RateLimitExceeded;
             }
         }
-        
+
         self
     }
 }
@@ -194,7 +194,7 @@ pub enum ErrorCategory {
 impl From<MonolithError> for TranslationError {
     fn from(error: MonolithError) -> Self {
         let msg = error.to_string();
-        
+
         // 根据错误消息内容判断错误类型
         if msg.contains("timeout") || msg.contains("超时") {
             TranslationError::TimeoutError(msg)
@@ -274,27 +274,27 @@ impl ErrorStats {
     /// 记录错误
     pub fn record_error(&mut self, error: &TranslationError) {
         self.total_errors += 1;
-        
+
         let category = error.category();
         *self.by_category.entry(category).or_insert(0) += 1;
-        
+
         let severity = error.severity();
         *self.by_severity.entry(severity).or_insert(0) += 1;
-        
+
         if error.is_retryable() {
             self.retryable_errors += 1;
         }
-        
+
         if severity == ErrorSeverity::Critical {
             self.critical_errors += 1;
         }
     }
-    
+
     /// 重置统计
     pub fn reset(&mut self) {
         *self = Default::default();
     }
-    
+
     /// 获取错误率
     pub fn error_rate(&self, total_operations: usize) -> f64 {
         if total_operations == 0 {
@@ -309,7 +309,7 @@ impl ErrorStats {
 #[cfg(feature = "translation")]
 pub mod helpers {
     use super::*;
-    
+
     /// 记录并返回错误
     pub fn log_error<T>(error: TranslationError) -> TranslationResult<T> {
         match error.severity() {
@@ -318,35 +318,35 @@ pub mod helpers {
             ErrorSeverity::Error => tracing::error!("翻译错误: {}", error),
             ErrorSeverity::Critical => tracing::error!("翻译严重错误: {}", error),
         }
-        
+
         Err(error)
     }
-    
+
     /// 创建网络错误
     pub fn network_error<T: fmt::Display>(msg: T) -> TranslationError {
         TranslationError::NetworkError(msg.to_string())
     }
-    
+
     /// 创建配置错误
     pub fn config_error<T: fmt::Display>(msg: T) -> TranslationError {
         TranslationError::ConfigError(msg.to_string())
     }
-    
+
     /// 创建缓存错误
     pub fn cache_error<T: fmt::Display>(msg: T) -> TranslationError {
         TranslationError::CacheError(msg.to_string())
     }
-    
+
     /// 创建输入验证错误
     pub fn validation_error<T: fmt::Display>(msg: T) -> TranslationError {
         TranslationError::InvalidInput(msg.to_string())
     }
-    
+
     /// 创建超时错误
     pub fn timeout_error<T: fmt::Display>(msg: T) -> TranslationError {
         TranslationError::TimeoutError(msg.to_string())
     }
-    
+
     /// 创建内部错误
     pub fn internal_error<T: fmt::Display>(msg: T) -> TranslationError {
         TranslationError::InternalError(msg.to_string())

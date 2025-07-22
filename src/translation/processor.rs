@@ -13,7 +13,7 @@ use regex::Regex;
 #[cfg(feature = "translation")]
 use tokio::time::{sleep, Duration};
 
-use crate::html::{set_node_attr};
+use crate::html::set_node_attr;
 use crate::translation::batch::{Batch, BatchType};
 use crate::translation::collector::TextItem;
 use crate::translation::error::{TranslationError, TranslationResult};
@@ -46,10 +46,15 @@ impl TranslationProcessor {
         tracing::info!("开始处理 {} 个翻译批次", batches.len());
 
         for (i, batch) in batches.into_iter().enumerate() {
-            tracing::debug!("处理批次 {}/{}: {}", i + 1, self.stats.total_batches, batch.summary());
+            tracing::debug!(
+                "处理批次 {}/{}: {}",
+                i + 1,
+                self.stats.total_batches,
+                batch.summary()
+            );
 
             let result = self.process_single_batch(batch).await;
-            
+
             match result {
                 Ok(_) => self.stats.successful_batches += 1,
                 Err(e) => {
@@ -131,7 +136,7 @@ impl TranslationProcessor {
     /// 尝试索引标记翻译
     async fn try_indexed_translation(&mut self, batch: &Batch) -> TranslationResult<bool> {
         let combined_text = self.combine_texts_with_indices(&batch.items);
-        
+
         tracing::debug!("索引组合文本长度: {} 字符", combined_text.len());
 
         match self.service.translate(&combined_text).await {
@@ -139,11 +144,10 @@ impl TranslationProcessor {
                 let success = self.apply_indexed_translation(&batch.items, &translated)?;
                 Ok(success)
             }
-            Err(e) => {
-                Err(TranslationError::TranslationServiceError(format!(
-                    "索引翻译请求失败: {}", e
-                )))
-            }
+            Err(e) => Err(TranslationError::TranslationServiceError(format!(
+                "索引翻译请求失败: {}",
+                e
+            ))),
         }
     }
 
@@ -158,7 +162,11 @@ impl TranslationProcessor {
     }
 
     /// 应用索引翻译结果
-    fn apply_indexed_translation(&mut self, items: &[TextItem], translated: &str) -> TranslationResult<bool> {
+    fn apply_indexed_translation(
+        &mut self,
+        items: &[TextItem],
+        translated: &str,
+    ) -> TranslationResult<bool> {
         let index_regex = Regex::new(r"^\[(\d+)\]\s*(.*)$")
             .map_err(|e| TranslationError::ParseError(format!("正则表达式编译失败: {}", e)))?;
 
@@ -238,7 +246,8 @@ impl TranslationProcessor {
 
     /// 处理单个项目
     async fn process_single_item(&mut self, item: &TextItem) -> TranslationResult<()> {
-        let translated = self.service
+        let translated = self
+            .service
             .translate(&item.text)
             .await
             .map_err(|e| TranslationError::TranslationServiceError(e.to_string()))?;
@@ -270,7 +279,7 @@ impl TranslationProcessor {
                 content_ref.push_slice(translated);
             } else {
                 return Err(TranslationError::InternalError(
-                    "节点不是文本类型".to_string()
+                    "节点不是文本类型".to_string(),
                 ));
             }
         }
