@@ -1,15 +1,13 @@
 # Makefile for monolith
 
-all: build build-gui
+all: build
 .PHONY: all
 
 build:
 	@cargo build --locked
 .PHONY: build
 
-build-gui:
-	@cargo build --locked --bin monolith-gui --features="gui"
-.PHONY: build_gui
+# GUI build target removed
 
 clean:
 	@cargo clean
