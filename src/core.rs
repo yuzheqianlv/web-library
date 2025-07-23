@@ -678,3 +678,135 @@ pub fn print_info_message(text: &str) {
 
     if handle.write_all(format!("{}\n", &text).as_bytes()).is_ok() {}
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use url::Url;
+
+    #[test]
+    fn test_monolith_error_new() {
+        let error = MonolithError::new("test error message");
+        assert_eq!(error.details, "test error message");
+    }
+
+    #[test]
+    fn test_monolith_error_display() {
+        let error = MonolithError::new("display test");
+        assert_eq!(format!("{}", error), "display test");
+    }
+
+    #[test]
+    fn test_detect_media_type_by_file_name_common_types() {
+        assert_eq!(detect_media_type_by_file_name("test.html"), "text/html");
+        assert_eq!(detect_media_type_by_file_name("style.css"), "text/css");
+        assert_eq!(detect_media_type_by_file_name("script.js"), "text/javascript");
+        assert_eq!(detect_media_type_by_file_name("image.png"), "image/png");
+        assert_eq!(detect_media_type_by_file_name("photo.jpg"), "image/jpeg");
+        assert_eq!(detect_media_type_by_file_name("icon.svg"), "image/svg+xml");
+    }
+
+    #[test]
+    fn test_detect_media_type_by_file_name_case_insensitive() {
+        assert_eq!(detect_media_type_by_file_name("TEST.HTML"), "text/html");
+        assert_eq!(detect_media_type_by_file_name("Image.PNG"), "image/png");
+        assert_eq!(detect_media_type_by_file_name("SCRIPT.JS"), "text/javascript");
+    }
+
+    #[test]
+    fn test_detect_media_type_by_file_name_unknown_extension() {
+        assert_eq!(detect_media_type_by_file_name("unknown.xyz"), "");
+        assert_eq!(detect_media_type_by_file_name("no_extension"), "");
+    }
+
+    #[test]
+    fn test_detect_media_type_by_file_name_multiple_dots() {
+        assert_eq!(detect_media_type_by_file_name("jquery.min.js"), "text/javascript");
+        assert_eq!(detect_media_type_by_file_name("bootstrap.min.css"), "text/css");
+    }
+
+    #[test]
+    fn test_detect_media_type_with_url() {
+        let url = Url::parse("https://example.com/test.html").unwrap();
+        let empty_data = &[];
+        assert_eq!(detect_media_type(empty_data, &url), "text/html");
+    }
+
+    #[test]
+    fn test_is_plaintext_media_type() {
+        assert!(is_plaintext_media_type("text/plain"));
+        assert!(is_plaintext_media_type("text/html"));
+        assert!(is_plaintext_media_type("text/css"));
+        assert!(is_plaintext_media_type("text/javascript"));
+        assert!(is_plaintext_media_type("application/json"));
+        assert!(is_plaintext_media_type("application/javascript"));
+        
+        assert!(!is_plaintext_media_type("image/png"));
+        assert!(!is_plaintext_media_type("video/mp4"));
+        assert!(!is_plaintext_media_type("audio/mpeg"));
+    }
+
+    #[test]
+    fn test_parse_content_type_basic() {
+        let (media_type, charset, is_base64) = parse_content_type("text/html");
+        assert_eq!(media_type, "text/html");
+        assert_eq!(charset, "US-ASCII"); // Default charset
+        assert!(!is_base64);
+    }
+
+    #[test]
+    fn test_parse_content_type_with_charset() {
+        let (media_type, charset, is_base64) = parse_content_type("text/html; charset=utf-8");
+        assert_eq!(media_type, "text/html");
+        assert_eq!(charset, "utf-8");
+        assert!(!is_base64);
+    }
+
+    #[test]
+    fn test_parse_content_type_with_base64() {
+        let (media_type, charset, is_base64) = parse_content_type("text/plain; base64");
+        assert_eq!(media_type, "text/plain");
+        assert_eq!(charset, "US-ASCII"); // Default charset
+        assert!(is_base64);
+    }
+
+    #[test]
+    fn test_parse_content_type_complex() {
+        let (media_type, charset, is_base64) = parse_content_type("text/html; charset=iso-8859-1; base64");
+        assert_eq!(media_type, "text/html");
+        assert_eq!(charset, "iso-8859-1");
+        assert!(is_base64);
+    }
+
+    #[test]
+    fn test_parse_content_type_empty() {
+        let (media_type, charset, is_base64) = parse_content_type("");
+        assert_eq!(media_type, "text/plain"); // Default media type
+        assert_eq!(charset, "US-ASCII"); // Default charset
+        assert!(!is_base64);
+    }
+
+    #[test]
+    fn test_format_output_path_basic() {
+        let path = format_output_path("test.html", "", MonolithOutputFormat::HTML);
+        assert_eq!(path, "test.html");
+    }
+
+    #[test] 
+    fn test_format_output_path_with_title() {
+        let path = format_output_path("%title%.html", "Test Title", MonolithOutputFormat::HTML);
+        assert_eq!(path, "Test Title.html");
+    }
+
+    #[test]
+    fn test_format_output_path_mhtml() {
+        let path = format_output_path("test.mhtml", "", MonolithOutputFormat::MHTML);
+        assert_eq!(path, "test.mhtml");
+    }
+
+    #[test]
+    fn test_format_output_path_title_sanitization() {
+        let path = format_output_path("%title%.html", "Test/Title<>:|?", MonolithOutputFormat::HTML);
+        assert_eq!(path, "Test_Title[] - -.html"); // ? is replaced with empty string
+    }
+}
