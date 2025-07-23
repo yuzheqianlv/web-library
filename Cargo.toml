@@ -33,6 +33,7 @@ web = [
     "tracing",
     "tracing-subscriber",
     "futures",
+    "zip",
 ]
 translation = [
     "markdown-translator",
@@ -58,7 +59,7 @@ vendored-openssl = ["openssl/vendored"]
 # Core dependencies (always included)
 atty = "0.2.14"
 base64 = "0.22.1"
-chrono = "0.4.41"
+chrono = { version = "0.4.41", features = ["serde"] }
 cssparser = "0.35.0"
 encoding_rs = "0.8.35"
 html5ever = "0.29.1"
@@ -68,6 +69,7 @@ percent-encoding = "2.3.1"
 redb = "2.4.0"
 sha2 = "0.10.9"
 url = "2.5.4"
+uuid = { version = "1.0", features = ["v4", "v5"] }
 
 # Regex with optimized features
 regex = { version = "1.11.1", default-features = false, features = ["std", "perf-dfa", "unicode-perl"] }
@@ -110,6 +112,9 @@ lru = { version = "0.12", optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 metrics = { version = "0.22", optional = true }
+
+# Archive dependencies (optional)
+zip = { version = "0.6", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.17"

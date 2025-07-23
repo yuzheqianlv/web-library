@@ -127,6 +127,12 @@ fn create_router(app_state: Arc<AppState>, config: &WebConfig) -> Router {
     if let Some(static_dir) = &config.static_dir {
         app = app.nest_service("/static", ServeDir::new(static_dir));
     }
+    
+    // 添加templates目录的静态文件服务
+    app = app.nest_service("/templates", ServeDir::new("templates"));
+    
+    // 添加assets目录的静态文件服务（用于CSS/JS等）
+    app = app.nest_service("/assets", ServeDir::new("templates/assets"));
 
     app
 }

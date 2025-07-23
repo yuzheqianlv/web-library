@@ -56,8 +56,21 @@ pub mod operations;
 pub mod service;
 pub mod types;
 
+// V2 API modules
+pub mod v2_handlers;
+pub mod v2_service;
+pub mod v2_types;
+pub mod cache;
+pub mod stats_handlers;
+
 // Re-export常用类型和函数以便使用
 pub use handlers::*;
 pub use operations::LibraryOperations;
 pub use service::LibraryService;
 pub use types::*;
+
+// V2 API re-exports
+pub use v2_handlers::*;
+pub use v2_service::LibraryServiceV2;
+pub use v2_types::*;
+pub use stats_handlers::*;

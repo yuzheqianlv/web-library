@@ -13,8 +13,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "web")]
 use std::collections::HashMap;
 #[cfg(feature = "web")]
-use futures::stream::TryStreamExt;
-#[cfg(feature = "web")]
 use url::Url;
 
 /// MongoDB中存储的HTML文件元数据

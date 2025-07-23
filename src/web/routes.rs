@@ -2,11 +2,31 @@
 
 #[cfg(feature = "web")]
 use axum::{
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 
-use crate::web::{handlers::*, library::handlers as lib_handlers, types::AppState};
+use crate::web::{
+    handlers::{*, pages::library_debug_page}, 
+    library::{
+        handlers as lib_handlers,
+        get_library_records_v2,
+        get_library_stats_v2,
+        get_library_record_by_id_v2,
+        delete_library_record_v2,
+        download_library_record_v2,
+        initialize_v2_indexes,
+        get_today_stats,
+        get_language_distribution,
+        get_cache_stats,
+        clear_stats_cache,
+        invalidate_stats_cache,
+        get_stats_dashboard,
+        batch_delete_library_records_v2,
+        export_library_records_v2,
+    }, 
+    types::AppState
+};
 use std::sync::Arc;
 
 /// 创建所有路由
@@ -16,6 +36,8 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         // 页面路由
         .route("/", get(index))
         .route("/library", get(library_page))
+        .route("/library/:id", get(view_translated_html))
+        .route("/library-debug", get(library_debug_page))
         .route("/bookmarklet", get(bookmarklet_page))
         .route("/website/*url", get(website_bookmarklet))
         // API 路由
@@ -25,7 +47,7 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/api/cache/clear", post(clear_cache))
         .route("/api/cache/cleanup", post(cleanup_cache))
         .route("/api/bookmarklet", get(generate_bookmarklet))
-        // Library API 路由
+        // Library API 路由 (V1 - Legacy)
         .route("/api/library", get(lib_handlers::get_library_data))
         .route("/api/library/stats", get(lib_handlers::get_library_stats))
         .route("/api/library/domain", get(lib_handlers::get_domain_details))
@@ -33,6 +55,23 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/api/library/batch-delete", post(batch_delete_urls))
         .route("/api/library/size-stats", get(get_size_statistics))
         .route("/api/library/health", get(health_check))
+        // Library API V2 路由 (New)
+        .route("/api/v2/library", get(get_library_records_v2))
+        .route("/api/v2/library/stats", get(get_library_stats_v2))
+        .route("/api/v2/library/:id", get(get_library_record_by_id_v2))
+        .route("/api/v2/library/:id", delete(delete_library_record_v2))
+        .route("/api/v2/library/:id/download", get(download_library_record_v2))
+        .route("/api/v2/library/batch-delete", delete(batch_delete_library_records_v2))
+        .route("/api/v2/library/export", post(export_library_records_v2))
+        .route("/api/v2/library/indexes/init", post(initialize_v2_indexes))
+        // 增强统计API
+        .route("/api/v2/library/stats/today", get(get_today_stats))
+        .route("/api/v2/library/stats/languages", get(get_language_distribution))
+        .route("/api/v2/library/stats/cache", get(get_cache_stats))
+        .route("/api/v2/library/stats/dashboard", get(get_stats_dashboard))
+        // 缓存管理API
+        .route("/api/v2/library/cache/clear", post(clear_stats_cache))
+        .route("/api/v2/library/cache/invalidate", post(invalidate_stats_cache))
         // Theme API 路由
         .route("/api/theme/list", get(get_themes))
         .route("/api/theme/current", get(get_current_theme_css))

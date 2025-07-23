@@ -1,7 +1,14 @@
 //! HTML 模板生成
 
-/// 生成库管理页面的HTML
+/// 生成库管理页面的HTML (使用外部模板文件)
 pub fn library_page() -> String {
+    // 使用外部模板文件，而不是内嵌HTML
+    include_str!("../../templates/library.html").to_string()
+}
+
+/// 生成库管理页面的HTML (旧版本，保留作为备份)
+#[allow(dead_code)]
+pub fn library_page_old() -> String {
     r#"<!DOCTYPE html>
 <html lang="zh-CN">
 <head>

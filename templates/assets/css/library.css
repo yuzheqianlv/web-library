@@ -1,0 +1,84 @@
+/* Library 页面专用样式 */
+
+/* 重置body样式以允许滚动 - 高优先级 */
+html, body {
+    overflow: visible !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100vh !important;
+    scroll-behavior: smooth !important;
+}
+
+/* 确保没有任何元素阻止滚动 */
+* {
+    scroll-behavior: inherit !important;
+}
+
+/* 页面布局 */
+.library-page {
+    background: #f5f5f5;
+    min-height: 150vh; /* 临时增加高度测试滚动 */
+    padding-top: 60px;
+}
+
+.library-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+    min-height: calc(100vh - 60px); /* 减去导航栏高度 */
+}
+
+/* 页面头部 */
+.page-header {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-bottom: 4px solid #667eea;
+}
+
+.page-title {
+    font-size: 2rem;
+    color: #667eea;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.page-subtitle {
+    color: #666;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+/* 统计卡片 */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin-top: 0.5rem;
+}

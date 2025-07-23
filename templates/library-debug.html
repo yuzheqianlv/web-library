@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Debug - Monolith</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .component { border: 1px solid #ddd; margin: 10px 0; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Library 组件调试页面</h1>
+    
+    <div class="debug">
+        <h3>组件加载状态</h3>
+        <div id="load-status">正在加载...</div>
+    </div>
+    
+    <div class="component">
+        <h3>导航栏组件</h3>
+        <div id="navbar-component"></div>
+    </div>
+    
+    <div class="component">
+        <h3>头部组件</h3>
+        <div id="header-component"></div>
+    </div>
+    
+    <div class="component">
+        <h3>工具栏组件</h3>
+        <div id="toolbar-component"></div>
+    </div>
+    
+    <div class="debug">
+        <h3>DOM 元素检查</h3>
+        <div id="dom-check">等待检查...</div>
+    </div>
+
+    <script>
+        // 简化的组件加载器
+        class DebugLoader {
+            static async loadComponent(containerId, componentPath) {
+                const statusDiv = document.getElementById('load-status');
+                
+                try {
+                    statusDiv.innerHTML += `<br>正在加载: ${componentPath}`;
+                    
+                    const response = await fetch(componentPath);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const html = await response.text();
+                    document.getElementById(containerId).innerHTML = html;
+                    
+                    statusDiv.innerHTML += ` ✅`;
+                    
+                } catch (error) {
+                    console.error(`加载组件失败 ${componentPath}:`, error);
+                    statusDiv.innerHTML += ` ❌ (${error.message})`;
+                    
+                    document.getElementById(containerId).innerHTML = 
+                        `<div style="color: #dc3545; padding: 1rem;">
+                            组件加载失败: ${componentPath}<br>
+                            错误: ${error.message}
+                        </div>`;
+                }
+            }
+
+            static async loadAllComponents() {
+                const components = [
+                    { id: 'navbar-component', path: '/templates/components/library-navbar.html' },
+                    { id: 'header-component', path: '/templates/components/library-header.html' },
+                    { id: 'toolbar-component', path: '/templates/components/library-toolbar.html' }
+                ];
+
+                for (const component of components) {
+                    await this.loadComponent(component.id, component.path);
+                }
+            }
+            
+            static checkDOMElements() {
+                const domCheck = document.getElementById('dom-check');
+                const elements = [
+                    'toggle-nav-btn',
+                    'floating-toggle', 
+                    'search-input',
+                    'status-filter',
+                    'language-filter',
+                    'total-count',
+                    'success-count'
+                ];
+                
+                let checkResults = [];
+                
+                elements.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        checkResults.push(`✅ ${id}: 找到`);
+                    } else {
+                        checkResults.push(`❌ ${id}: 未找到`);
+                    }
+                });
+                
+                domCheck.innerHTML = checkResults.join('<br>');
+            }
+        }
+
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', async () => {
+            const statusDiv = document.getElementById('load-status');
+            statusDiv.innerHTML = '开始加载组件...';
+            
+            try {
+                await DebugLoader.loadAllComponents();
+                statusDiv.innerHTML += '<br><span class="success">✅ 所有组件加载完成</span>';
+                
+                // 等待DOM渲染
+                setTimeout(() => {
+                    DebugLoader.checkDOMElements();
+                }, 200);
+                
+            } catch (error) {
+                statusDiv.innerHTML += `<br><span class="error">❌ 加载失败: ${error.message}</span>`;
+            }
+        });
+    </script>
+</body>
+</html>
