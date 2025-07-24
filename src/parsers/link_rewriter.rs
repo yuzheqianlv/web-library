@@ -2,17 +2,36 @@
 //!
 //! 负责重写HTML中的链接，使其指向翻译服务
 
-use markup5ever_rcdom::{Handle, NodeData, RcDom};
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use crate::parsers::html::{get_node_attr, set_node_attr};
 use crate::utils::url::{resolve_url, Url};
+use markup5ever_rcdom::{Handle, NodeData, RcDom};
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 
 /// Define the percent-encoding set for URLs - encode everything except unreserved characters
 const URL_ENCODE_SET: &AsciiSet = &CONTROLS
-    .add(b' ').add(b'"').add(b'<').add(b'>').add(b'`')
-    .add(b':').add(b'/').add(b'?').add(b'#').add(b'[').add(b']').add(b'@')
-    .add(b'!').add(b'$').add(b'&').add(b'\'').add(b'(').add(b')')
-    .add(b'*').add(b'+').add(b',').add(b';').add(b'=');
+    .add(b' ')
+    .add(b'"')
+    .add(b'<')
+    .add(b'>')
+    .add(b'`')
+    .add(b':')
+    .add(b'/')
+    .add(b'?')
+    .add(b'#')
+    .add(b'[')
+    .add(b']')
+    .add(b'@')
+    .add(b'!')
+    .add(b'$')
+    .add(b'&')
+    .add(b'\'')
+    .add(b'(')
+    .add(b')')
+    .add(b'*')
+    .add(b'+')
+    .add(b',')
+    .add(b';')
+    .add(b'=');
 
 /// 重写HTML中的所有链接
 ///
@@ -25,11 +44,7 @@ const URL_ENCODE_SET: &AsciiSet = &CONTROLS
 /// # Returns
 ///
 /// 处理过的DOM树，所有链接已重写为指向翻译服务
-pub fn rewrite_links_in_dom(
-    dom: RcDom,
-    base_url: &Url,
-    translation_base_path: &str,
-) -> RcDom {
+pub fn rewrite_links_in_dom(dom: RcDom, base_url: &Url, translation_base_path: &str) -> RcDom {
     walk_and_rewrite_links(&dom.document, base_url, translation_base_path);
     dom
 }
@@ -50,27 +65,27 @@ pub fn rewrite_links_in_html(
     base_url: &str,
     translation_base_path: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    use crate::parsers::html::{html_to_dom, serialize_document};
     use crate::core::MonolithOptions;
+    use crate::parsers::html::{html_to_dom, serialize_document};
 
     let base_path = translation_base_path.unwrap_or("/website/");
-    
+
     // 解析base URL
     let parsed_base_url = match base_url.parse::<Url>() {
         Ok(url) => url,
-        Err(e) => return Err(format!("Invalid base URL: {}", e).into()),
+        Err(e) => return Err(format!("Invalid base URL: {e}").into()),
     };
 
     // 将HTML转换为DOM
     let dom = html_to_dom(html.as_bytes(), "utf-8".to_string());
-    
+
     // 重写链接
     let rewritten_dom = rewrite_links_in_dom(dom, &parsed_base_url, base_path);
-    
+
     // 序列化回HTML
     let options = MonolithOptions::default();
     let serialized = serialize_document(rewritten_dom, "utf-8".to_string(), &options);
-    
+
     Ok(String::from_utf8_lossy(&serialized).to_string())
 }
 
@@ -104,7 +119,7 @@ fn walk_and_rewrite_links(node: &Handle, base_url: &Url, translation_base_path: 
 fn rewrite_anchor_link(node: &Handle, base_url: &Url, translation_base_path: &str) {
     if let Some(href_value) = get_node_attr(node, "href") {
         let trimmed_href = href_value.trim();
-        
+
         // 跳过特殊链接
         if should_skip_link(trimmed_href) {
             return;
@@ -121,14 +136,15 @@ fn rewrite_anchor_link(node: &Handle, base_url: &Url, translation_base_path: &st
 fn rewrite_form_action(node: &Handle, base_url: &Url, translation_base_path: &str) {
     if let Some(action_value) = get_node_attr(node, "action") {
         let trimmed_action = action_value.trim();
-        
+
         // 跳过空action或javascript
         if trimmed_action.is_empty() || trimmed_action.starts_with("javascript:") {
             return;
         }
 
         // 重写action URL
-        if let Some(rewritten_action) = rewrite_url(trimmed_action, base_url, translation_base_path) {
+        if let Some(rewritten_action) = rewrite_url(trimmed_action, base_url, translation_base_path)
+        {
             set_node_attr(node, "action", Some(rewritten_action));
         }
     }
@@ -161,7 +177,7 @@ fn rewrite_url(url: &str, base_url: &Url, translation_base_path: &str) -> Option
 
     // 编码URL并构建翻译链接
     let encoded_url = utf8_percent_encode(absolute_url.as_str(), URL_ENCODE_SET);
-    Some(format!("{}{}", translation_base_path, encoded_url))
+    Some(format!("{translation_base_path}{encoded_url}"))
 }
 
 #[cfg(test)]
@@ -176,7 +192,7 @@ mod tests {
         assert!(should_skip_link("mailto:test@example.com"));
         assert!(should_skip_link("tel:+1234567890"));
         assert!(should_skip_link("data:text/plain;base64,SGVsbG8="));
-        
+
         assert!(!should_skip_link("https://example.com"));
         assert!(!should_skip_link("/relative/path"));
         assert!(!should_skip_link("relative.html"));
@@ -189,11 +205,17 @@ mod tests {
 
         // 测试绝对URL
         let result = rewrite_url("https://other.com/page", &base_url, translation_path);
-        assert_eq!(result, Some("/website/https%3A%2F%2Fother.com%2Fpage".to_string()));
+        assert_eq!(
+            result,
+            Some("/website/https%3A%2F%2Fother.com%2Fpage".to_string())
+        );
 
         // 测试相对URL
         let result = rewrite_url("/relative", &base_url, translation_path);
-        assert_eq!(result, Some("/website/https%3A%2F%2Fexample.com%2Frelative".to_string()));
+        assert_eq!(
+            result,
+            Some("/website/https%3A%2F%2Fexample.com%2Frelative".to_string())
+        );
 
         // 测试非HTTP URL应该返回None
         let result = rewrite_url("ftp://example.com", &base_url, translation_path);
@@ -205,7 +227,7 @@ mod tests {
         let html = "<html><body><a href=\"https://example.com/page\">External Link</a><a href=\"/relative\">Relative Link</a><a href=\"#section\">Anchor Link</a><a href=\"javascript:void(0)\">JS Link</a></body></html>";
 
         let result = rewrite_links_in_html(html, "https://test.com", None).unwrap();
-        
+
         // 检查外部链接被重写
         assert!(result.contains("/website/https%3A%2F%2Fexample.com%2Fpage"));
         // 检查相对链接被重写

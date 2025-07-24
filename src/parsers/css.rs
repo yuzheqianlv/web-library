@@ -5,6 +5,8 @@ use cssparser::{
 use crate::network::session::Session;
 use crate::utils::url::{create_data_url, resolve_url, Url, EMPTY_IMAGE_DATA_URL};
 
+// CSS处理模块化功能
+
 const CSS_PROPS_WITH_IMAGE_URLS: &[&str] = &[
     // Universal
     "background",
@@ -52,6 +54,23 @@ pub fn is_image_url_prop(prop_name: &str) -> bool {
         .any(|p| prop_name.eq_ignore_ascii_case(p))
 }
 
+/// CSS处理上下文，跟踪当前解析状态
+#[derive(Debug, Clone)]
+pub struct CssProcessingContext {
+    pub current_rule: String,
+    pub current_prop: String,
+}
+
+impl CssProcessingContext {
+    pub fn new(rule_name: &str, prop_name: &str) -> Self {
+        Self {
+            current_rule: rule_name.to_string(),
+            current_prop: prop_name.to_string(),
+        }
+    }
+}
+
+/// 主要的CSS处理函数，经过模块化重构
 pub fn process_css<'a>(
     session: &mut Session,
     document_url: &Url,
@@ -59,309 +78,413 @@ pub fn process_css<'a>(
     rule_name: &str,
     prop_name: &str,
     func_name: &str,
-) -> Result<String, ParseError<'a, String>> {
-    let mut result: String = "".to_string();
-
-    let mut curr_rule: String = rule_name.to_string();
-    let mut curr_prop: String = prop_name.to_string();
-    let mut token: &Token;
-    let mut token_offset: SourcePosition;
+) -> Result<String, ParseError<'static, String>> {
+    let mut result = String::new();
+    let mut context = CssProcessingContext::new(rule_name, prop_name);
 
     loop {
-        token_offset = parser.position();
-        token = match parser.next_including_whitespace_and_comments() {
+        let token_offset = parser.position();
+        let token = match parser.next_including_whitespace_and_comments() {
             Ok(token) => token,
-            Err(_) => {
-                break;
-            }
+            Err(_) => break,
         };
 
-        match *token {
+        let token_result = match &token {
             Token::Comment(_) => {
-                let token_slice = parser.slice_from(token_offset);
-                result.push_str(token_slice);
+                parser.slice_from(token_offset).to_string()
             }
-            Token::Semicolon => result.push(';'),
-            Token::Colon => result.push(':'),
-            Token::Comma => result.push(','),
-            Token::ParenthesisBlock | Token::SquareBracketBlock | Token::CurlyBracketBlock => {
-                if session.options.no_fonts && curr_rule == "font-face" {
-                    continue;
-                }
-
-                let closure: &str;
-                if token == &Token::ParenthesisBlock {
-                    result.push('(');
-                    closure = ")";
-                } else if token == &Token::SquareBracketBlock {
-                    result.push('[');
-                    closure = "]";
+            Token::Semicolon => ";".to_string(),
+            Token::Colon => ":".to_string(),
+            Token::Comma => ",".to_string(),
+            Token::CloseParenthesis => ")".to_string(),
+            Token::CloseSquareBracket => "]".to_string(),
+            Token::CloseCurlyBracket => "}".to_string(),
+            Token::IncludeMatch => "~=".to_string(),
+            Token::DashMatch => "|=".to_string(),
+            Token::PrefixMatch => "^=".to_string(),
+            Token::SuffixMatch => "$=".to_string(),
+            Token::SubstringMatch => "*=".to_string(),
+            Token::CDO => "<!--".to_string(),
+            Token::CDC => "-->".to_string(),
+            Token::WhiteSpace(value) => value.to_string(),
+            Token::Ident(value) => {
+                context.current_rule.clear();
+                context.current_prop = value.to_string();
+                format_ident(value)
+            }
+            Token::AtKeyword(value) => {
+                context.current_rule = value.to_string();
+                if session.options.no_fonts && context.current_rule == "font-face" {
+                    String::new()
                 } else {
-                    result.push('{');
-                    closure = "}";
+                    format!("@{}", value)
                 }
+            }
+            Token::Hash(value) => format!("#{}", value),
+            Token::IDHash(value) => {
+                context.current_rule.clear();
+                format!("#{}", format_ident(value))
+            }
+            Token::QuotedString(value) => {
+                process_quoted_string_token(value, session, document_url, &mut context, func_name)?
+            }
+            Token::Number { has_sign, value, .. } => {
+                let mut result = String::new();
+                if *has_sign && *value >= 0.0 {
+                    result.push('+');
+                }
+                result.push_str(&value.to_string());
+                result
+            }
+            Token::Percentage { has_sign, unit_value, .. } => {
+                let mut result = String::new();
+                if *has_sign && *unit_value >= 0.0 {
+                    result.push('+');
+                }
+                result.push_str(&(unit_value * 100.0).to_string());
+                result.push('%');
+                result
+            }
+            Token::Dimension { has_sign, value, unit, .. } => {
+                let mut result = String::new();
+                if *has_sign && *value >= 0.0 {
+                    result.push('+');
+                }
+                result.push_str(&value.to_string());
+                result.push_str(unit);
+                result
+            }
+            Token::UnquotedUrl(value) => {
+                process_unquoted_url_token(value, session, document_url, &mut context)?
+            }
+            Token::Delim(value) => value.to_string(),
+            Token::ParenthesisBlock | Token::SquareBracketBlock | Token::CurlyBracketBlock => {
+                // 处理块结构token
+                if session.options.no_fonts && context.current_rule == "font-face" {
+                    String::new()
+                } else {
+                    let (open_char, close_char) = match token {
+                        Token::ParenthesisBlock => ('(', ')'),
+                        Token::SquareBracketBlock => ('[', ']'),
+                        Token::CurlyBracketBlock => ('{', '}'),
+                        _ => ('(', ')'), // fallback
+                    };
 
-                let block_css: String = parser
+                    let mut result = String::new();
+                    result.push(open_char);
+
+                    let block_css = parser
+                        .parse_nested_block(|parser| {
+                            process_css(
+                                session,
+                                document_url,
+                                parser,
+                                rule_name,
+                                &context.current_prop,
+                                func_name,
+                            )
+                        })
+                        .unwrap();
+                    result.push_str(&block_css);
+
+                    result.push(close_char);
+                    result
+                }
+            }
+            Token::Function(name) => {
+                // 处理函数token
+                let function_name = name.to_string();
+                let mut result = String::new();
+                result.push_str(&function_name);
+                result.push('(');
+
+                let block_css = parser
                     .parse_nested_block(|parser| {
                         process_css(
                             session,
                             document_url,
                             parser,
                             rule_name,
-                            curr_prop.as_str(),
-                            func_name,
+                            &context.current_prop,
+                            &function_name,
                         )
                     })
                     .unwrap();
-                result.push_str(block_css.as_str());
-
-                result.push_str(closure);
-            }
-            Token::CloseParenthesis => result.push(')'),
-            Token::CloseSquareBracket => result.push(']'),
-            Token::CloseCurlyBracket => result.push('}'),
-            Token::IncludeMatch => result.push_str("~="),
-            Token::DashMatch => result.push_str("|="),
-            Token::PrefixMatch => result.push_str("^="),
-            Token::SuffixMatch => result.push_str("$="),
-            Token::SubstringMatch => result.push_str("*="),
-            Token::CDO => result.push_str("<!--"),
-            Token::CDC => result.push_str("-->"),
-            Token::WhiteSpace(value) => {
-                result.push_str(value);
-            }
-            // div...
-            Token::Ident(ref value) => {
-                curr_rule = "".to_string();
-                curr_prop = value.to_string();
-                result.push_str(&format_ident(value));
-            }
-            // @import, @font-face, @charset, @media...
-            Token::AtKeyword(ref value) => {
-                curr_rule = value.to_string();
-                if session.options.no_fonts && curr_rule == "font-face" {
-                    continue;
-                }
-                result.push('@');
-                result.push_str(value);
-            }
-            Token::Hash(ref value) => {
-                result.push('#');
-                result.push_str(value);
-            }
-            Token::QuotedString(ref value) => {
-                if curr_rule == "import" {
-                    // Reset current at-rule value
-                    curr_rule = "".to_string();
-
-                    // Skip empty import values
-                    if value.is_empty() {
-                        result.push_str("''");
-                        continue;
-                    }
-
-                    let import_full_url: Url = resolve_url(document_url, value);
-                    match session.retrieve_asset(document_url, &import_full_url) {
-                        Ok((
-                            import_contents,
-                            import_final_url,
-                            import_media_type,
-                            import_charset,
-                        )) => {
-                            let mut import_data_url = create_data_url(
-                                &import_media_type,
-                                &import_charset,
-                                embed_css(
-                                    session,
-                                    &import_final_url,
-                                    &String::from_utf8_lossy(&import_contents),
-                                )
-                                .as_bytes(),
-                                &import_final_url,
-                            );
-                            import_data_url.set_fragment(import_full_url.fragment());
-                            result
-                                .push_str(format_quoted_string(import_data_url.as_ref()).as_str());
-                        }
-                        Err(_) => {
-                            // Keep remote reference if unable to retrieve the asset
-                            if import_full_url.scheme() == "http"
-                                || import_full_url.scheme() == "https"
-                            {
-                                result.push_str(
-                                    format_quoted_string(import_full_url.as_ref()).as_str(),
-                                );
-                            }
-                        }
-                    }
-                } else if func_name == "url" {
-                    // Skip empty url()'s
-                    if value.is_empty() {
-                        continue;
-                    }
-
-                    if session.options.no_images && is_image_url_prop(curr_prop.as_str()) {
-                        result.push_str(format_quoted_string(EMPTY_IMAGE_DATA_URL).as_str());
-                    } else {
-                        let resolved_url: Url = resolve_url(document_url, value);
-
-                        match session.retrieve_asset(document_url, &resolved_url) {
-                            Ok((data, final_url, media_type, charset)) => {
-                                // TODO: if it's @font-face, exclude definitions of non-woff/woff-2 fonts (if woff/woff-2 are present)
-                                let mut data_url =
-                                    create_data_url(&media_type, &charset, &data, &final_url);
-                                data_url.set_fragment(resolved_url.fragment());
-                                result.push_str(format_quoted_string(data_url.as_ref()).as_str());
-                            }
-                            Err(_) => {
-                                // Keep remote reference if unable to retrieve the asset
-                                if resolved_url.scheme() == "http"
-                                    || resolved_url.scheme() == "https"
-                                {
-                                    result.push_str(
-                                        format_quoted_string(resolved_url.as_ref()).as_str(),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    result.push_str(format_quoted_string(value).as_str());
-                }
-            }
-            Token::Number {
-                ref has_sign,
-                ref value,
-                ..
-            } => {
-                if *has_sign && *value >= 0. {
-                    result.push('+');
-                }
-                result.push_str(&value.to_string())
-            }
-            Token::Percentage {
-                ref has_sign,
-                ref unit_value,
-                ..
-            } => {
-                if *has_sign && *unit_value >= 0. {
-                    result.push('+');
-                }
-                result.push_str(&(unit_value * 100.0).to_string());
-                result.push('%');
-            }
-            Token::Dimension {
-                ref has_sign,
-                ref value,
-                ref unit,
-                ..
-            } => {
-                if *has_sign && *value >= 0. {
-                    result.push('+');
-                }
-                result.push_str(&value.to_string());
-                result.push_str(unit.as_ref());
-            }
-            // #selector, #id...
-            Token::IDHash(ref value) => {
-                curr_rule = "".to_string();
-                result.push('#');
-                result.push_str(&format_ident(value));
-            }
-            // url()
-            Token::UnquotedUrl(ref value) => {
-                let is_import: bool = curr_rule == "import";
-
-                if is_import {
-                    // Reset current at-rule value
-                    curr_rule = "".to_string();
-                }
-
-                // Skip empty url()'s
-                if value.is_empty() {
-                    result.push_str("url()");
-                    continue;
-                } else if value.starts_with("#") {
-                    result.push_str("url(");
-                    result.push_str(value);
-                    result.push(')');
-                    continue;
-                }
-
-                result.push_str("url(");
-                if is_import {
-                    let full_url: Url = resolve_url(document_url, value);
-                    match session.retrieve_asset(document_url, &full_url) {
-                        Ok((css, final_url, media_type, charset)) => {
-                            let mut data_url = create_data_url(
-                                &media_type,
-                                &charset,
-                                embed_css(session, &final_url, &String::from_utf8_lossy(&css))
-                                    .as_bytes(),
-                                &final_url,
-                            );
-                            data_url.set_fragment(full_url.fragment());
-                            result.push_str(format_quoted_string(data_url.as_ref()).as_str());
-                        }
-                        Err(_) => {
-                            // Keep remote reference if unable to retrieve the asset
-                            if full_url.scheme() == "http" || full_url.scheme() == "https" {
-                                result.push_str(format_quoted_string(full_url.as_ref()).as_str());
-                            }
-                        }
-                    }
-                } else if is_image_url_prop(curr_prop.as_str()) && session.options.no_images {
-                    result.push_str(format_quoted_string(EMPTY_IMAGE_DATA_URL).as_str());
-                } else {
-                    let full_url: Url = resolve_url(document_url, value);
-                    match session.retrieve_asset(document_url, &full_url) {
-                        Ok((data, final_url, media_type, charset)) => {
-                            let mut data_url =
-                                create_data_url(&media_type, &charset, &data, &final_url);
-                            data_url.set_fragment(full_url.fragment());
-                            result.push_str(format_quoted_string(data_url.as_ref()).as_str());
-                        }
-                        Err(_) => {
-                            // Keep remote reference if unable to retrieve the asset
-                            if full_url.scheme() == "http" || full_url.scheme() == "https" {
-                                result.push_str(format_quoted_string(full_url.as_ref()).as_str());
-                            }
-                        }
-                    }
-                }
-                result.push(')');
-            }
-            // =
-            Token::Delim(ref value) => result.push(*value),
-            Token::Function(ref name) => {
-                let function_name: &str = &name.clone();
-                result.push_str(function_name);
-                result.push('(');
-
-                let block_css: String = parser
-                    .parse_nested_block(|parser| {
-                        process_css(
-                            session,
-                            document_url,
-                            parser,
-                            curr_rule.as_str(),
-                            curr_prop.as_str(),
-                            function_name,
-                        )
-                    })
-                    .unwrap();
-                result.push_str(block_css.as_str());
+                result.push_str(&block_css);
 
                 result.push(')');
+                result
             }
-            Token::BadUrl(_) | Token::BadString(_) => {}
-        }
+            Token::BadUrl(_) | Token::BadString(_) => String::new(),
+        };
+
+        result.push_str(&token_result);
     }
 
     // Ensure empty CSS is really empty
     if !result.is_empty() && result.trim().is_empty() {
-        result = result.trim().to_string()
+        result = result.trim().to_string();
     }
 
+    Ok(result)
+}
+
+
+/// 处理引用字符串token
+fn process_quoted_string_token(
+    value: &str,
+    session: &mut Session,
+    document_url: &Url,
+    context: &mut CssProcessingContext,
+    func_name: &str,
+) -> Result<String, ParseError<'static, String>> {
+    if context.current_rule == "import" {
+        process_import_quoted_string(value, session, document_url, context)
+    } else if func_name == "url" {
+        process_url_quoted_string(value, session, document_url, context)
+    } else {
+        Ok(format_quoted_string(value))
+    }
+}
+
+/// 处理@import规则中的引用字符串
+fn process_import_quoted_string(
+    value: &str,
+    session: &mut Session,
+    document_url: &Url,
+    context: &mut CssProcessingContext,
+) -> Result<String, ParseError<'static, String>> {
+    // Reset current at-rule value
+    context.current_rule.clear();
+
+    // Skip empty import values
+    if value.is_empty() {
+        return Ok("''".to_string());
+    }
+
+    let import_full_url = resolve_url(document_url, value);
+    match session.retrieve_asset(document_url, &import_full_url) {
+        Ok((import_contents, import_final_url, import_media_type, import_charset)) => {
+            let mut import_data_url = create_data_url(
+                &import_media_type,
+                &import_charset,
+                embed_css(
+                    session,
+                    &import_final_url,
+                    &String::from_utf8_lossy(&import_contents),
+                )
+                .as_bytes(),
+                &import_final_url,
+            );
+            import_data_url.set_fragment(import_full_url.fragment());
+            Ok(format_quoted_string(import_data_url.as_ref()))
+        }
+        Err(_) => {
+            // Keep remote reference if unable to retrieve the asset
+            if import_full_url.scheme() == "http" || import_full_url.scheme() == "https" {
+                Ok(format_quoted_string(import_full_url.as_ref()))
+            } else {
+                Ok(String::new())
+            }
+        }
+    }
+}
+
+/// 处理url()函数中的引用字符串
+fn process_url_quoted_string(
+    value: &str,
+    session: &mut Session,
+    document_url: &Url,
+    context: &CssProcessingContext,
+) -> Result<String, ParseError<'static, String>> {
+    // Skip empty url()'s
+    if value.is_empty() {
+        return Ok(String::new());
+    }
+
+    if session.options.no_images && is_image_url_prop(&context.current_prop) {
+        return Ok(format_quoted_string(EMPTY_IMAGE_DATA_URL));
+    }
+
+    let resolved_url = resolve_url(document_url, value);
+    match session.retrieve_asset(document_url, &resolved_url) {
+        Ok((data, final_url, media_type, charset)) => {
+            let mut data_url = create_data_url(&media_type, &charset, &data, &final_url);
+            data_url.set_fragment(resolved_url.fragment());
+            Ok(format_quoted_string(data_url.as_ref()))
+        }
+        Err(_) => {
+            // Keep remote reference if unable to retrieve the asset
+            if resolved_url.scheme() == "http" || resolved_url.scheme() == "https" {
+                Ok(format_quoted_string(resolved_url.as_ref()))
+            } else {
+                Ok(String::new())
+            }
+        }
+    }
+}
+
+/// 处理未引用URL token
+fn process_unquoted_url_token(
+    value: &str,
+    session: &mut Session,
+    document_url: &Url,
+    context: &mut CssProcessingContext,
+) -> Result<String, ParseError<'static, String>> {
+    let is_import = context.current_rule == "import";
+
+    if is_import {
+        context.current_rule.clear();
+    }
+
+    // Skip empty url()'s
+    if value.is_empty() {
+        return Ok("url()".to_string());
+    }
+
+    // Skip hash-only URLs
+    if value.starts_with('#') {
+        return Ok(format!("url({})", value));
+    }
+
+    let mut result = "url(".to_string();
+
+    if is_import {
+        process_import_unquoted_url(value, session, document_url, &mut result)?;
+    } else if is_image_url_prop(&context.current_prop) && session.options.no_images {
+        result.push_str(&format_quoted_string(EMPTY_IMAGE_DATA_URL));
+    } else {
+        process_regular_unquoted_url(value, session, document_url, &mut result)?;
+    }
+
+    result.push(')');
+    Ok(result)
+}
+
+/// 处理@import中的未引用URL
+fn process_import_unquoted_url(
+    value: &str,
+    session: &mut Session,
+    document_url: &Url,
+    result: &mut String,
+) -> Result<(), ParseError<'static, String>> {
+    let full_url = resolve_url(document_url, value);
+    match session.retrieve_asset(document_url, &full_url) {
+        Ok((css, final_url, media_type, charset)) => {
+            let mut data_url = create_data_url(
+                &media_type,
+                &charset,
+                embed_css(session, &final_url, &String::from_utf8_lossy(&css))
+                    .as_bytes(),
+                &final_url,
+            );
+            data_url.set_fragment(full_url.fragment());
+            result.push_str(&format_quoted_string(data_url.as_ref()));
+        }
+        Err(_) => {
+            // Keep remote reference if unable to retrieve the asset
+            if full_url.scheme() == "http" || full_url.scheme() == "https" {
+                result.push_str(&format_quoted_string(full_url.as_ref()));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// 处理常规未引用URL
+fn process_regular_unquoted_url(
+    value: &str,
+    session: &mut Session,
+    document_url: &Url,
+    result: &mut String,
+) -> Result<(), ParseError<'static, String>> {
+    let full_url = resolve_url(document_url, value);
+    match session.retrieve_asset(document_url, &full_url) {
+        Ok((data, final_url, media_type, charset)) => {
+            let mut data_url = create_data_url(&media_type, &charset, &data, &final_url);
+            data_url.set_fragment(full_url.fragment());
+            result.push_str(&format_quoted_string(data_url.as_ref()));
+        }
+        Err(_) => {
+            // Keep remote reference if unable to retrieve the asset
+            if full_url.scheme() == "http" || full_url.scheme() == "https" {
+                result.push_str(&format_quoted_string(full_url.as_ref()));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// 处理块结构token
+fn process_block_token<'a>(
+    token: &Token,
+    session: &mut Session,
+    document_url: &Url,
+    context: &CssProcessingContext,
+    parser: &mut Parser,
+    rule_name: &str,
+    func_name: &str,
+) -> Result<String, ParseError<'static, String>> {
+    if session.options.no_fonts && context.current_rule == "font-face" {
+        return Ok(String::new());
+    }
+
+    let (open_char, close_char) = match token {
+        Token::ParenthesisBlock => ('(', ')'),
+        Token::SquareBracketBlock => ('[', ']'),
+        Token::CurlyBracketBlock => ('{', '}'),
+        _ => return Ok(String::new()),
+    };
+
+    let mut result = String::new();
+    result.push(open_char);
+
+    let block_css = parser
+        .parse_nested_block(|parser| {
+            process_css(
+                session,
+                document_url,
+                parser,
+                rule_name,
+                &context.current_prop,
+                func_name,
+            )
+        })
+        .unwrap();
+    result.push_str(&block_css);
+
+    result.push(close_char);
+    Ok(result)
+}
+
+/// 处理函数token
+fn process_function_token<'a>(
+    name: &str,
+    session: &mut Session,
+    document_url: &Url,
+    context: &CssProcessingContext,
+    parser: &mut Parser,
+    rule_name: &str,
+) -> Result<String, ParseError<'static, String>> {
+    let function_name = name.to_string();
+    let mut result = String::new();
+    result.push_str(&function_name);
+    result.push('(');
+
+    let block_css = parser
+        .parse_nested_block(|parser| {
+            process_css(
+                session,
+                document_url,
+                parser,
+                rule_name,
+                &context.current_prop,
+                &function_name,
+            )
+        })
+        .unwrap();
+    result.push_str(&block_css);
+
+    result.push(')');
     Ok(result)
 }

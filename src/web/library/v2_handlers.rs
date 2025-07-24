@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "web")]
 use axum::{
-    extract::{Query, State, Path},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
@@ -18,8 +18,8 @@ use futures::TryStreamExt;
 #[cfg(feature = "web")]
 use crate::web::types::AppState;
 
-use super::v2_types::*;
 use super::v2_service::LibraryServiceV2;
+use super::v2_types::*;
 
 /// 获取库记录列表处理器 (V2版本)
 ///
@@ -30,10 +30,10 @@ pub async fn get_library_records_v2(
     Query(query): Query<LibraryListQuery>,
 ) -> Result<Json<LibraryListResponse>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.get_library_records(&query).await {
             Ok(response) => Ok(Json(response)),
             Err(e) => Err(create_api_error(
@@ -42,7 +42,7 @@ pub async fn get_library_records_v2(
                 &format!("查询库记录失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         // 如果没有MongoDB连接，返回空数据
@@ -72,10 +72,10 @@ pub async fn get_library_stats_v2(
     Query(query): Query<StatsQuery>,
 ) -> Result<Json<LibraryStatsResponse>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.get_library_stats(&query).await {
             Ok(stats) => Ok(Json(stats)),
             Err(e) => Err(create_api_error(
@@ -84,7 +84,7 @@ pub async fn get_library_stats_v2(
                 &format!("获取统计信息失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -104,12 +104,12 @@ pub async fn get_library_record_by_id_v2(
     Path(id): Path<String>,
 ) -> Result<Json<LibraryRecord>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         use mongodb::bson::{doc, oid::ObjectId};
-        
+
         let collection = database.collection::<crate::web::types::CachedHtml>("html_cache");
-        
+
         // 尝试通过ObjectId查找
         let filter = if let Ok(object_id) = ObjectId::parse_str(&id) {
             doc! { "_id": object_id }
@@ -123,11 +123,12 @@ pub async fn get_library_record_by_id_v2(
                 None,
             ));
         };
-        
+
         match collection.find_one(filter).await {
             Ok(Some(cached)) => {
                 let service = LibraryServiceV2::new(database.clone());
-                let record = service.cached_html_to_record(&cached, Some(ObjectId::parse_str(&id).unwrap()));
+                let record =
+                    service.cached_html_to_record(&cached, Some(ObjectId::parse_str(&id).unwrap()));
                 Ok(Json(record))
             }
             Ok(None) => Err(create_api_error(
@@ -143,7 +144,7 @@ pub async fn get_library_record_by_id_v2(
                 &format!("查询记录失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -163,12 +164,12 @@ pub async fn delete_library_record_v2(
     Path(id): Path<String>,
 ) -> Result<Json<DeleteResponse>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         use mongodb::bson::{doc, oid::ObjectId};
-        
+
         let collection = database.collection::<crate::web::types::CachedHtml>("html_cache");
-        
+
         // 尝试通过ObjectId删除
         let filter = if let Ok(object_id) = ObjectId::parse_str(&id) {
             doc! { "_id": object_id }
@@ -181,21 +182,20 @@ pub async fn delete_library_record_v2(
                 None,
             ));
         };
-        
+
         // 先查询记录以计算释放的空间
         match collection.find_one(filter.clone()).await {
             Ok(Some(cached)) => {
-                let freed_bytes = (cached.original_html.len() + cached.translated_html.len()) as i64;
-                
+                let freed_bytes =
+                    (cached.original_html.len() + cached.translated_html.len()) as i64;
+
                 match collection.delete_one(filter).await {
-                    Ok(result) if result.deleted_count > 0 => {
-                        Ok(Json(DeleteResponse {
-                            success: true,
-                            deleted_id: id,
-                            freed_bytes,
-                            deleted_at: chrono::Utc::now(),
-                        }))
-                    }
+                    Ok(result) if result.deleted_count > 0 => Ok(Json(DeleteResponse {
+                        success: true,
+                        deleted_id: id,
+                        freed_bytes,
+                        deleted_at: chrono::Utc::now(),
+                    })),
                     Ok(_) => Err(create_api_error(
                         StatusCode::NOT_FOUND,
                         "RECORD_NOT_FOUND",
@@ -209,7 +209,7 @@ pub async fn delete_library_record_v2(
                         &format!("删除记录失败: {}", e),
                         request_id,
                         None,
-                    ))
+                    )),
                 }
             }
             Ok(None) => Err(create_api_error(
@@ -225,7 +225,7 @@ pub async fn delete_library_record_v2(
                 &format!("查询记录失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -246,14 +246,14 @@ pub async fn download_library_record_v2(
     Query(query): Query<DownloadQuery>,
 ) -> Result<axum::response::Response, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
-        use mongodb::bson::{doc, oid::ObjectId};
-        use axum::response::IntoResponse;
         use axum::http::{header, HeaderMap, HeaderValue};
-        
+        use axum::response::IntoResponse;
+        use mongodb::bson::{doc, oid::ObjectId};
+
         let collection = database.collection::<crate::web::types::CachedHtml>("html_cache");
-        
+
         // 尝试通过ObjectId查找
         let filter = if let Ok(object_id) = ObjectId::parse_str(&id) {
             doc! { "_id": object_id }
@@ -266,100 +266,136 @@ pub async fn download_library_record_v2(
                 None,
             ));
         };
-        
+
         match collection.find_one(filter).await {
             Ok(Some(cached)) => {
                 let (content, filename, content_type) = match query.content_type {
-                    DownloadType::Original => {
-                        (cached.original_html, format!("{}_original.html", id), "text/html")
-                    }
-                    DownloadType::Translated => {
-                        (cached.translated_html, format!("{}_translated.html", id), "text/html")
-                    }
+                    DownloadType::Original => (
+                        cached.original_html,
+                        format!("{}_original.html", id),
+                        "text/html",
+                    ),
+                    DownloadType::Translated => (
+                        cached.translated_html,
+                        format!("{}_translated.html", id),
+                        "text/html",
+                    ),
                     DownloadType::Both => {
                         // 创建ZIP文件包含两个HTML文件
                         use std::io::{Cursor, Write};
-                        use zip::{ZipWriter, write::FileOptions, CompressionMethod};
-                        
+                        use zip::{write::FileOptions, CompressionMethod, ZipWriter};
+
                         let mut zip_buffer = Cursor::new(Vec::new());
                         {
                             let mut zip_writer = ZipWriter::new(&mut zip_buffer);
-                            
+
                             // 添加原始HTML
-                            zip_writer.start_file(
-                                format!("{}_original.html", id),
-                                FileOptions::default().compression_method(CompressionMethod::Deflated)
-                            ).map_err(|e| create_api_error(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "ZIP_ERROR",
-                                &format!("创建ZIP文件失败: {}", e),
-                                request_id.clone(),
-                                None,
-                            ))?;
-                            zip_writer.write_all(cached.original_html.as_bytes()).map_err(|e| create_api_error(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "ZIP_ERROR",
-                                &format!("写入ZIP文件失败: {}", e),
-                                request_id.clone(),
-                                None,
-                            ))?;
-                            
+                            zip_writer
+                                .start_file(
+                                    format!("{}_original.html", id),
+                                    FileOptions::default()
+                                        .compression_method(CompressionMethod::Deflated),
+                                )
+                                .map_err(|e| {
+                                    create_api_error(
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        "ZIP_ERROR",
+                                        &format!("创建ZIP文件失败: {}", e),
+                                        request_id.clone(),
+                                        None,
+                                    )
+                                })?;
+                            zip_writer
+                                .write_all(cached.original_html.as_bytes())
+                                .map_err(|e| {
+                                    create_api_error(
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        "ZIP_ERROR",
+                                        &format!("写入ZIP文件失败: {}", e),
+                                        request_id.clone(),
+                                        None,
+                                    )
+                                })?;
+
                             // 添加翻译HTML
-                            zip_writer.start_file(
-                                format!("{}_translated.html", id),
-                                FileOptions::default().compression_method(CompressionMethod::Deflated)
-                            ).map_err(|e| create_api_error(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "ZIP_ERROR",
-                                &format!("创建ZIP文件失败: {}", e),
-                                request_id.clone(),
-                                None,
-                            ))?;
-                            zip_writer.write_all(cached.translated_html.as_bytes()).map_err(|e| create_api_error(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "ZIP_ERROR",
-                                &format!("写入ZIP文件失败: {}", e),
-                                request_id.clone(),
-                                None,
-                            ))?;
-                            
-                            zip_writer.finish().map_err(|e| create_api_error(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "ZIP_ERROR",
-                                &format!("完成ZIP文件失败: {}", e),
-                                request_id.clone(),
-                                None,
-                            ))?;
+                            zip_writer
+                                .start_file(
+                                    format!("{}_translated.html", id),
+                                    FileOptions::default()
+                                        .compression_method(CompressionMethod::Deflated),
+                                )
+                                .map_err(|e| {
+                                    create_api_error(
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        "ZIP_ERROR",
+                                        &format!("创建ZIP文件失败: {}", e),
+                                        request_id.clone(),
+                                        None,
+                                    )
+                                })?;
+                            zip_writer
+                                .write_all(cached.translated_html.as_bytes())
+                                .map_err(|e| {
+                                    create_api_error(
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        "ZIP_ERROR",
+                                        &format!("写入ZIP文件失败: {}", e),
+                                        request_id.clone(),
+                                        None,
+                                    )
+                                })?;
+
+                            zip_writer.finish().map_err(|e| {
+                                create_api_error(
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    "ZIP_ERROR",
+                                    &format!("完成ZIP文件失败: {}", e),
+                                    request_id.clone(),
+                                    None,
+                                )
+                            })?;
                         }
-                        
+
                         let zip_data = zip_buffer.into_inner();
                         // ZIP文件是二进制数据，不能作为字符串返回
                         // 这里我们需要返回二进制响应
                         let headers = {
                             let mut h = HeaderMap::new();
-                            h.insert(header::CONTENT_TYPE, HeaderValue::from_str("application/zip").unwrap());
+                            h.insert(
+                                header::CONTENT_TYPE,
+                                HeaderValue::from_str("application/zip").unwrap(),
+                            );
                             let disposition = if query.inline {
                                 format!("inline; filename=\"{}_both.zip\"", id)
                             } else {
                                 format!("attachment; filename=\"{}_both.zip\"", id)
                             };
-                            h.insert(header::CONTENT_DISPOSITION, HeaderValue::from_str(&disposition).unwrap());
+                            h.insert(
+                                header::CONTENT_DISPOSITION,
+                                HeaderValue::from_str(&disposition).unwrap(),
+                            );
                             h
                         };
                         return Ok((headers, zip_data).into_response());
                     }
                 };
-                
+
                 let mut headers = HeaderMap::new();
-                headers.insert(header::CONTENT_TYPE, HeaderValue::from_str(content_type).unwrap());
-                
+                headers.insert(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_str(content_type).unwrap(),
+                );
+
                 let disposition = if query.inline {
                     format!("inline; filename=\"{}\"", filename)
                 } else {
                     format!("attachment; filename=\"{}\"", filename)
                 };
-                headers.insert(header::CONTENT_DISPOSITION, HeaderValue::from_str(&disposition).unwrap());
-                
+                headers.insert(
+                    header::CONTENT_DISPOSITION,
+                    HeaderValue::from_str(&disposition).unwrap(),
+                );
+
                 Ok((headers, content).into_response())
             }
             Ok(None) => Err(create_api_error(
@@ -375,7 +411,7 @@ pub async fn download_library_record_v2(
                 &format!("查询记录失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -394,10 +430,10 @@ pub async fn initialize_v2_indexes(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.create_v2_indexes().await {
             Ok(()) => Ok(Json(serde_json::json!({
                 "success": true,
@@ -409,7 +445,7 @@ pub async fn initialize_v2_indexes(
                 &format!("创建V2索引失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -439,9 +475,9 @@ pub struct DownloadQuery {
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DownloadType {
-    Original,    // 原始HTML
-    Translated,  // 翻译后HTML
-    Both,        // 压缩包含两个文件
+    Original,   // 原始HTML
+    Translated, // 翻译后HTML
+    Both,       // 压缩包含两个文件
 }
 
 #[cfg(feature = "web")]
@@ -482,10 +518,9 @@ fn create_api_error(
             details,
             request_id,
             timestamp: chrono::Utc::now(),
-        })
+        }),
     )
 }
-
 
 /// 非 web feature 的占位函数
 #[cfg(not(feature = "web"))]
@@ -545,19 +580,19 @@ pub async fn batch_delete_library_records_v2(
     Json(request): Json<BatchDeleteRequest>,
 ) -> Result<Json<BatchDeleteResponse>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         use mongodb::bson::{doc, oid::ObjectId};
-        
+
         let collection = database.collection::<crate::web::types::CachedHtml>("html_cache");
-        
+
         let mut object_ids = Vec::new();
         for id_str in &request.ids {
             if let Ok(object_id) = ObjectId::parse_str(id_str) {
                 object_ids.push(object_id);
             }
         }
-        
+
         if object_ids.is_empty() {
             return Err(create_api_error(
                 StatusCode::BAD_REQUEST,
@@ -567,15 +602,16 @@ pub async fn batch_delete_library_records_v2(
                 None,
             ));
         }
-        
+
         // 先查询记录以计算释放的空间
         let filter = doc! { "_id": { "$in": &object_ids } };
         let mut total_freed_bytes = 0u64;
-        
+
         match collection.find(filter.clone()).await {
             Ok(mut cursor) => {
                 while let Some(cached) = cursor.try_next().await.unwrap_or(None) {
-                    total_freed_bytes += (cached.original_html.len() + cached.translated_html.len()) as u64;
+                    total_freed_bytes +=
+                        (cached.original_html.len() + cached.translated_html.len()) as u64;
                 }
             }
             Err(e) => {
@@ -588,23 +624,21 @@ pub async fn batch_delete_library_records_v2(
                 ));
             }
         }
-        
+
         // 执行批量删除
         match collection.delete_many(filter).await {
-            Ok(result) => {
-                Ok(Json(BatchDeleteResponse {
-                    deleted_count: result.deleted_count as usize,
-                    freed_bytes: total_freed_bytes,
-                    success: true,
-                }))
-            }
+            Ok(result) => Ok(Json(BatchDeleteResponse {
+                deleted_count: result.deleted_count as usize,
+                freed_bytes: total_freed_bytes,
+                success: true,
+            })),
             Err(e) => Err(create_api_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "DELETE_ERROR",
                 &format!("批量删除失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -624,23 +658,23 @@ pub async fn export_library_records_v2(
     Json(request): Json<ExportRequest>,
 ) -> Result<axum::response::Response, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
-        use mongodb::bson::{doc, oid::ObjectId};
-        use axum::response::IntoResponse;
         use axum::http::{header, HeaderMap, HeaderValue};
+        use axum::response::IntoResponse;
+        use mongodb::bson::{doc, oid::ObjectId};
         use std::io::{Cursor, Write};
-        use zip::{ZipWriter, write::FileOptions, CompressionMethod};
-        
+        use zip::{write::FileOptions, CompressionMethod, ZipWriter};
+
         let collection = database.collection::<crate::web::types::CachedHtml>("html_cache");
-        
+
         let mut object_ids = Vec::new();
         for id_str in &request.ids {
             if let Ok(object_id) = ObjectId::parse_str(id_str) {
                 object_ids.push(object_id);
             }
         }
-        
+
         if object_ids.is_empty() {
             return Err(create_api_error(
                 StatusCode::BAD_REQUEST,
@@ -650,83 +684,110 @@ pub async fn export_library_records_v2(
                 None,
             ));
         }
-        
+
         let filter = doc! { "_id": { "$in": &object_ids } };
-        
+
         match collection.find(filter).await {
             Ok(mut cursor) => {
                 let mut zip_buffer = Cursor::new(Vec::new());
                 let include_originals = request.include_originals.unwrap_or(true);
-                
+
                 {
                     let mut zip_writer = ZipWriter::new(&mut zip_buffer);
                     let mut file_index = 1;
-                    
+
                     while let Some(cached) = cursor.try_next().await.unwrap_or(None) {
                         // 添加翻译后的HTML
                         let translated_filename = format!("{:03}_translated.html", file_index);
-                        zip_writer.start_file(
-                            translated_filename,
-                            FileOptions::default().compression_method(CompressionMethod::Deflated)
-                        ).map_err(|e| create_api_error(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "ZIP_ERROR",
-                            &format!("创建ZIP文件失败: {}", e),
-                            request_id.clone(),
-                            None,
-                        ))?;
-                        zip_writer.write_all(cached.translated_html.as_bytes()).map_err(|e| create_api_error(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "ZIP_ERROR",
-                            &format!("写入ZIP文件失败: {}", e),
-                            request_id.clone(),
-                            None,
-                        ))?;
-                        
+                        zip_writer
+                            .start_file(
+                                translated_filename,
+                                FileOptions::default()
+                                    .compression_method(CompressionMethod::Deflated),
+                            )
+                            .map_err(|e| {
+                                create_api_error(
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    "ZIP_ERROR",
+                                    &format!("创建ZIP文件失败: {}", e),
+                                    request_id.clone(),
+                                    None,
+                                )
+                            })?;
+                        zip_writer
+                            .write_all(cached.translated_html.as_bytes())
+                            .map_err(|e| {
+                                create_api_error(
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    "ZIP_ERROR",
+                                    &format!("写入ZIP文件失败: {}", e),
+                                    request_id.clone(),
+                                    None,
+                                )
+                            })?;
+
                         // 如果需要，添加原始HTML
                         if include_originals {
                             let original_filename = format!("{:03}_original.html", file_index);
-                            zip_writer.start_file(
-                                original_filename,
-                                FileOptions::default().compression_method(CompressionMethod::Deflated)
-                            ).map_err(|e| create_api_error(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "ZIP_ERROR",
-                                &format!("创建ZIP文件失败: {}", e),
-                                request_id.clone(),
-                                None,
-                            ))?;
-                            zip_writer.write_all(cached.original_html.as_bytes()).map_err(|e| create_api_error(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "ZIP_ERROR",
-                                &format!("写入ZIP文件失败: {}", e),
-                                request_id.clone(),
-                                None,
-                            ))?;
+                            zip_writer
+                                .start_file(
+                                    original_filename,
+                                    FileOptions::default()
+                                        .compression_method(CompressionMethod::Deflated),
+                                )
+                                .map_err(|e| {
+                                    create_api_error(
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        "ZIP_ERROR",
+                                        &format!("创建ZIP文件失败: {}", e),
+                                        request_id.clone(),
+                                        None,
+                                    )
+                                })?;
+                            zip_writer
+                                .write_all(cached.original_html.as_bytes())
+                                .map_err(|e| {
+                                    create_api_error(
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        "ZIP_ERROR",
+                                        &format!("写入ZIP文件失败: {}", e),
+                                        request_id.clone(),
+                                        None,
+                                    )
+                                })?;
                         }
-                        
+
                         file_index += 1;
                     }
-                    
-                    zip_writer.finish().map_err(|e| create_api_error(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "ZIP_ERROR",
-                        &format!("完成ZIP文件失败: {}", e),
-                        request_id.clone(),
-                        None,
-                    ))?;
+
+                    zip_writer.finish().map_err(|e| {
+                        create_api_error(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "ZIP_ERROR",
+                            &format!("完成ZIP文件失败: {}", e),
+                            request_id.clone(),
+                            None,
+                        )
+                    })?;
                 }
-                
+
                 let zip_data = zip_buffer.into_inner();
-                let filename = format!("library_export_{}.zip", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
-                
+                let filename = format!(
+                    "library_export_{}.zip",
+                    chrono::Utc::now().format("%Y%m%d_%H%M%S")
+                );
+
                 let mut headers = HeaderMap::new();
-                headers.insert(header::CONTENT_TYPE, HeaderValue::from_str("application/zip").unwrap());
+                headers.insert(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_str("application/zip").unwrap(),
+                );
                 headers.insert(
                     header::CONTENT_DISPOSITION,
-                    HeaderValue::from_str(&format!("attachment; filename=\"{}\"", filename)).unwrap()
+                    HeaderValue::from_str(&format!("attachment; filename=\"{}\"", filename))
+                        .unwrap(),
                 );
-                
+
                 Ok((headers, zip_data).into_response())
             }
             Err(e) => Err(create_api_error(
@@ -735,7 +796,7 @@ pub async fn export_library_records_v2(
                 &format!("查询记录失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(

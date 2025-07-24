@@ -25,8 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 解析命令行参数
     let args: Vec<String> = std::env::args().collect();
 
-    let mut bind_addr = std::env::var("WEB_BIND_ADDRESS")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let mut bind_addr =
+        std::env::var("WEB_BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
     let mut port = std::env::var("WEB_PORT")
         .unwrap_or_else(|_| "7080".to_string())
         .parse::<u16>()

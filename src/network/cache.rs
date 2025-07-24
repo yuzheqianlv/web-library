@@ -85,7 +85,7 @@ impl Cache {
             .insert((*key).to_string(), cache_metadata_item);
     }
 
-    pub fn get(&self, key: &str) -> Result<(Vec<u8>, String, String), Error> {
+    pub fn get(&self, key: &str) -> Result<(Vec<u8>, String, String), Box<Error>> {
         if self.metadata.contains_key(key) {
             let metadata_item = self.metadata.get(key).unwrap();
 
@@ -96,20 +96,27 @@ impl Cache {
                     metadata_item.charset.as_ref().expect("").to_string(),
                 ));
             } else if self.db_ok.is_some() && self.db_ok.unwrap() {
-                let read_txn = self.db.as_ref().unwrap().begin_read()?;
-                let table = read_txn.open_table(TABLE)?;
-                let data = table.get(key)?;
-                let bytes = data.unwrap();
-
-                return Ok((
-                    bytes.value().to_vec(),
-                    metadata_item.media_type.as_ref().expect("").to_string(),
-                    metadata_item.charset.as_ref().expect("").to_string(),
-                ));
+                match self.db.as_ref().unwrap().begin_read() {
+                    Ok(read_txn) => match read_txn.open_table(TABLE) {
+                        Ok(table) => match table.get(key) {
+                            Ok(data) => {
+                                let bytes = data.unwrap();
+                                return Ok((
+                                    bytes.value().to_vec(),
+                                    metadata_item.media_type.as_ref().expect("").to_string(),
+                                    metadata_item.charset.as_ref().expect("").to_string(),
+                                ));
+                            }
+                            Err(e) => return Err(Box::new(e.into())),
+                        },
+                        Err(e) => return Err(Box::new(e.into())),
+                    },
+                    Err(e) => return Err(Box::new(e.into())),
+                }
             }
         }
 
-        Err(Error::TransactionInProgress) // XXX
+        Err(Box::new(Error::TransactionInProgress)) // XXX
     }
 
     pub fn contains_key(&self, key: &str) -> bool {
@@ -144,7 +151,7 @@ impl Cache {
                         FILE_WRITE_BUF_LEN
                     };
                     let buffer = &mut buffer[..bytes_to_write];
-                    writer.write(buffer).unwrap();
+                    writer.write_all(buffer).unwrap();
 
                     remaining_size -= bytes_to_write;
                 }

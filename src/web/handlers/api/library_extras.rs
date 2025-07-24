@@ -9,7 +9,7 @@ use axum::{
     response::Json,
 };
 
-use crate::web::types::{AppState};
+use crate::web::types::AppState;
 
 /// 库操作处理器（批量操作等）
 #[cfg(feature = "web")]
@@ -20,23 +20,27 @@ pub async fn library_action(
     // 转发到library模块的处理器
     use crate::web::library::handlers::library_action as lib_action;
     use crate::web::library::types::LibraryActionRequest;
-    
+
     // 尝试解析请求
-    let action_request: LibraryActionRequest = serde_json::from_value(request)
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": true,
-                    "message": format!("解析请求失败: {}", e)
-                }))
-            )
-        })?;
-    
+    let action_request: LibraryActionRequest = serde_json::from_value(request).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": true,
+                "message": format!("解析请求失败: {}", e)
+            })),
+        )
+    })?;
+
     // 调用library模块的处理器
-    match lib_action(axum::extract::State(_state), axum::extract::Json(action_request)).await {
+    match lib_action(
+        axum::extract::State(_state),
+        axum::extract::Json(action_request),
+    )
+    .await
+    {
         Ok(response) => Ok(Json(serde_json::to_value(response.0).unwrap())),
-        Err((status, json_err)) => Err((status, json_err))
+        Err((status, json_err)) => Err((status, json_err)),
     }
 }
 
@@ -48,17 +52,20 @@ pub async fn batch_delete_urls(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if let Some(ref database) = state.mongo_database {
         use crate::web::library::service::LibraryService;
-        
+
         let service = LibraryService::new(database.clone());
-        
+
         // 解析URL列表
-        let urls: Vec<String> = request.get("urls")
+        let urls: Vec<String> = request
+            .get("urls")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap_or_default();
-        
+
         if urls.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
@@ -68,7 +75,7 @@ pub async fn batch_delete_urls(
                 })),
             ));
         }
-        
+
         match service.batch_delete_urls(&urls).await {
             Ok(deleted_count) => Ok(Json(serde_json::json!({
                 "success": true,
@@ -81,7 +88,7 @@ pub async fn batch_delete_urls(
                     "error": true,
                     "message": format!("批量删除失败: {}", e)
                 })),
-            ))
+            )),
         }
     } else {
         Err((
@@ -101,9 +108,9 @@ pub async fn get_size_statistics(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if let Some(ref database) = state.mongo_database {
         use crate::web::library::service::LibraryService;
-        
+
         let service = LibraryService::new(database.clone());
-        
+
         match service.get_library_stats().await {
             Ok(stats) => {
                 let average_size = if stats.total_urls > 0 {
@@ -111,7 +118,7 @@ pub async fn get_size_statistics(
                 } else {
                     0
                 };
-                
+
                 Ok(Json(serde_json::json!({
                     "total_size": stats.total_size_bytes,
                     "average_size": average_size,
@@ -121,14 +128,14 @@ pub async fn get_size_statistics(
                         "domains": stats.total_domains
                     }
                 })))
-            },
+            }
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
                     "error": true,
                     "message": format!("获取统计信息失败: {}", e)
                 })),
-            ))
+            )),
         }
     } else {
         Err((

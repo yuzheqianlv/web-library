@@ -1,5 +1,5 @@
 //! Web端主题管理模块
-//! 
+//!
 //! 提供统一的主题切换和管理功能，包括：
 //! - 多主题配置管理
 //! - 主题资源生成
@@ -154,7 +154,7 @@ impl ThemeManager {
             themes: HashMap::new(),
             current_theme: "light".to_string(),
         };
-        
+
         // 注册默认主题
         manager.register_default_themes();
         manager
@@ -184,7 +184,8 @@ impl ThemeManager {
                 info: "#3b82f6".to_string(),
             },
             fonts: ThemeFonts {
-                family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif".to_string(),
+                family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif"
+                    .to_string(),
                 mono_family: "'SF Mono', 'Monaco', 'Consolas', monospace".to_string(),
                 base_size: "16px".to_string(),
                 line_height: "1.6".to_string(),
@@ -346,11 +347,11 @@ impl ThemeManager {
         if name == "light" || name == "dark" {
             return Err("不能删除默认主题".to_string());
         }
-        
+
         if self.current_theme == name {
             self.current_theme = "light".to_string();
         }
-        
+
         self.themes.remove(name);
         Ok(())
     }
@@ -460,15 +461,18 @@ impl ThemeManager {
 
     /// 生成主题选择器HTML
     pub fn generate_theme_selector(&self) -> String {
-        let options = self.themes.values()
+        let options = self
+            .themes
+            .values()
             .map(|theme| {
-                let selected = if theme.name == self.current_theme { " selected" } else { "" };
+                let selected = if theme.name == self.current_theme {
+                    " selected"
+                } else {
+                    ""
+                };
                 format!(
                     r#"<option value="{}" data-is-dark="{}"{}>{}</option>"#,
-                    theme.name,
-                    theme.is_dark,
-                    selected,
-                    theme.display_name
+                    theme.name, theme.is_dark, selected, theme.display_name
                 )
             })
             .collect::<Vec<_>>()
@@ -571,7 +575,8 @@ class ThemeManager {
 document.addEventListener('DOMContentLoaded', () => {
     window.themeManager = new ThemeManager();
 });
-"#.to_string()
+"#
+        .to_string()
     }
 }
 

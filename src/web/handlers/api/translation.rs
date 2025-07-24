@@ -16,7 +16,6 @@ use crate::core::{create_monolithic_document, MonolithError};
 use crate::session::Session;
 use crate::web::types::{AppState, TranslateRequest, TranslateResponse};
 
-
 /// 翻译 URL 处理器
 #[cfg(feature = "web")]
 pub async fn translate_url(
@@ -24,19 +23,25 @@ pub async fn translate_url(
     ExtractJson(request): ExtractJson<TranslateRequest>,
 ) -> Result<Json<TranslateResponse>, (StatusCode, Json<serde_json::Value>)> {
     let url = request.url.clone();
-    let target_lang = request.target_lang.clone().unwrap_or_else(|| "zh".to_string());
-    let source_lang = request.source_lang.clone().unwrap_or_else(|| "auto".to_string());
+    let target_lang = request
+        .target_lang
+        .clone()
+        .unwrap_or_else(|| "zh".to_string());
+    let source_lang = request
+        .source_lang
+        .clone()
+        .unwrap_or_else(|| "auto".to_string());
 
     // 检查MongoDB缓存
     if let Some(ref collection) = state.mongo_collection {
         use mongodb::bson::doc;
-        
+
         let filter = doc! {
             "url": &url,
             "source_lang": &source_lang,
             "target_lang": &target_lang
         };
-        
+
         if let Ok(Some(cached)) = collection.find_one(filter).await {
             let response = TranslateResponse {
                 original_html: cached.original_html,
@@ -152,14 +157,18 @@ pub async fn translate_url(
     #[cfg(feature = "translation")]
     {
         use crate::parsers::link_rewriter::rewrite_links_in_html;
-        
+
         // 检查是否启用了链接重写功能
         if state.monolith_options.rewrite_links {
-            let translation_base_path = state.monolith_options.translation_base_path
+            let translation_base_path = state
+                .monolith_options
+                .translation_base_path
                 .as_deref()
                 .unwrap_or("/website/");
-                
-            if let Ok(rewritten_html) = rewrite_links_in_html(&translated_html, &url, Some(translation_base_path)) {
+
+            if let Ok(rewritten_html) =
+                rewrite_links_in_html(&translated_html, &url, Some(translation_base_path))
+            {
                 translated_html = rewritten_html;
             } else {
                 // 如果链接重写失败，记录错误但继续使用原始HTML
@@ -174,7 +183,7 @@ pub async fn translate_url(
     // 缓存结果到MongoDB
     if let Some(ref collection) = state.mongo_collection {
         use crate::web::types::CachedHtml;
-        
+
         let cached_html = CachedHtml {
             url: request.url.clone(),
             original_html: original_html.clone(),

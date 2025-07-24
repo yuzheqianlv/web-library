@@ -6,17 +6,13 @@
 use std::sync::Arc;
 
 #[cfg(feature = "web")]
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 
 #[cfg(feature = "web")]
 use crate::web::types::AppState;
 
-use super::v2_types::*;
 use super::v2_service::LibraryServiceV2;
+use super::v2_types::*;
 
 /// 获取今日统计信息处理器
 #[cfg(feature = "web")]
@@ -24,10 +20,10 @@ pub async fn get_today_stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<TodayStats>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.get_today_stats().await {
             Ok(stats) => Ok(Json(stats)),
             Err(e) => Err(create_api_error(
@@ -36,7 +32,7 @@ pub async fn get_today_stats(
                 &format!("获取今日统计失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -55,10 +51,10 @@ pub async fn get_language_distribution(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<LanguageStats>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.get_language_distribution().await {
             Ok(stats) => Ok(Json(stats)),
             Err(e) => Err(create_api_error(
@@ -67,7 +63,7 @@ pub async fn get_language_distribution(
                 &format!("获取语言分布失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -86,10 +82,10 @@ pub async fn get_cache_stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<super::cache::CacheInfo>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.get_cache_stats().await {
             Ok(stats) => Ok(Json(stats)),
             Err(e) => Err(create_api_error(
@@ -98,7 +94,7 @@ pub async fn get_cache_stats(
                 &format!("获取缓存统计失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -117,10 +113,10 @@ pub async fn clear_stats_cache(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.clear_stats_cache().await {
             Ok(()) => Ok(Json(serde_json::json!({
                 "success": true,
@@ -133,7 +129,7 @@ pub async fn clear_stats_cache(
                 &format!("清理缓存失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -152,10 +148,10 @@ pub async fn invalidate_stats_cache(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         match service.invalidate_stats_cache().await {
             Ok(()) => Ok(Json(serde_json::json!({
                 "success": true,
@@ -168,7 +164,7 @@ pub async fn invalidate_stats_cache(
                 &format!("使缓存失效失败: {}", e),
                 request_id,
                 None,
-            ))
+            )),
         }
     } else {
         Err(create_api_error(
@@ -187,48 +183,54 @@ pub async fn get_stats_dashboard(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<StatsDashboard>, (StatusCode, Json<ApiError>)> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     if let Some(ref database) = state.mongo_database {
         let service = LibraryServiceV2::new(database.clone());
-        
+
         // 并行获取各种统计信息
         let (today_stats_result, language_stats_result, cache_info_result) = tokio::join!(
             service.get_today_stats(),
             service.get_language_distribution(),
             service.get_cache_stats()
         );
-        
-        let today_stats = today_stats_result.map_err(|e| create_api_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "STATS_ERROR",
-            &format!("获取今日统计失败: {}", e),
-            request_id.clone(),
-            None,
-        ))?;
-        
-        let language_stats = language_stats_result.map_err(|e| create_api_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "STATS_ERROR",
-            &format!("获取语言统计失败: {}", e),
-            request_id.clone(),
-            None,
-        ))?;
-        
-        let cache_info = cache_info_result.map_err(|e| create_api_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "CACHE_ERROR",
-            &format!("获取缓存信息失败: {}", e),
-            request_id.clone(),
-            None,
-        ))?;
-        
+
+        let today_stats = today_stats_result.map_err(|e| {
+            create_api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "STATS_ERROR",
+                &format!("获取今日统计失败: {}", e),
+                request_id.clone(),
+                None,
+            )
+        })?;
+
+        let language_stats = language_stats_result.map_err(|e| {
+            create_api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "STATS_ERROR",
+                &format!("获取语言统计失败: {}", e),
+                request_id.clone(),
+                None,
+            )
+        })?;
+
+        let cache_info = cache_info_result.map_err(|e| {
+            create_api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "CACHE_ERROR",
+                &format!("获取缓存信息失败: {}", e),
+                request_id.clone(),
+                None,
+            )
+        })?;
+
         let dashboard = StatsDashboard {
             today: today_stats,
             languages: language_stats,
             cache: cache_info,
             last_updated: chrono::Utc::now(),
         };
-        
+
         Ok(Json(dashboard))
     } else {
         Err(create_api_error(
@@ -272,7 +274,7 @@ fn create_api_error(
             details,
             request_id,
             timestamp: chrono::Utc::now(),
-        })
+        }),
     )
 }
 

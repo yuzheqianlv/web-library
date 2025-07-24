@@ -198,7 +198,7 @@ impl Session {
                         }
                         Err(error) => {
                             if !self.options.silent {
-                                print_error_message(&format!("{}", error));
+                                print_error_message(&format!("{error}"));
                             }
                         }
                     }
@@ -220,7 +220,7 @@ impl Session {
                 }
                 Err(error) => {
                     if !self.options.silent {
-                        print_error_message(&format!("{} ({})", &cache_key, error));
+                        print_error_message(&format!("{cache_key} ({error})"));
                     }
 
                     Err(self.client.get("").send().unwrap_err())

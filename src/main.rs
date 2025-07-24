@@ -158,12 +158,12 @@ impl Output {
         if destination.is_empty() || destination.eq("-") {
             Ok(Output::Stdout(io::stdout()))
         } else {
-            let final_destination = format_output_path(destination, document_title, format);
+            let final_destination = format_output_path(destination, Some(document_title), format == MonolithOutputFormat::MHTML);
             Ok(Output::File(fs::File::create(final_destination)?))
         }
     }
 
-    fn write(&mut self, bytes: &Vec<u8>) -> Result<(), IoError> {
+    fn write(&mut self, bytes: &[u8]) -> Result<(), IoError> {
         match self {
             Output::Stdout(stdout) => {
                 stdout.write_all(bytes)?;
@@ -257,25 +257,12 @@ fn main() {
     }
 
     // Set up cache (attempt to create temporary file)
-    let temp_cache_file: Option<NamedTempFile> = match Builder::new().prefix("monolith-").tempfile()
-    {
-        Ok(tempfile) => Some(tempfile),
-        Err(_) => None,
-    };
+    let temp_cache_file: Option<NamedTempFile> = Builder::new().prefix("monolith-").tempfile().ok();
     let cache = Some(Cache::new(
         CACHE_ASSET_FILE_SIZE_THRESHOLD,
-        if temp_cache_file.is_some() {
-            Some(
-                temp_cache_file
-                    .as_ref()
-                    .unwrap()
-                    .path()
-                    .display()
-                    .to_string(),
-            )
-        } else {
-            None
-        },
+        temp_cache_file
+            .as_ref()
+            .map(|file| file.path().display().to_string()),
     ));
 
     // Read and parse cookie file
@@ -289,8 +276,7 @@ fn main() {
                 Err(_) => {
                     if !options.silent {
                         print_error_message(&format!(
-                            "could not parse specified cookie file \"{}\"",
-                            opt_cookie_file
+                            "could not parse specified cookie file \"{opt_cookie_file}\""
                         ));
                     }
                     process::exit(1);
@@ -299,8 +285,7 @@ fn main() {
             Err(_) => {
                 if !options.silent {
                     print_error_message(&format!(
-                        "could not read specified cookie file \"{}\"",
-                        opt_cookie_file
+                        "could not read specified cookie file \"{opt_cookie_file}\""
                     ));
                 }
                 process::exit(1);
@@ -334,14 +319,14 @@ fn main() {
             }
             Err(error) => {
                 if !silent {
-                    print_error_message(&format!("Error: {}", error));
+                    print_error_message(&format!("Error: {error}"));
                 }
 
                 exit_code = 1;
             }
         }
     } else {
-        match create_monolithic_document(session, target.clone()) {
+        match create_monolithic_document(session, &target) {
             Ok((result, title)) => {
                 // Define output
                 let mut output = Output::new(
@@ -356,7 +341,7 @@ fn main() {
             }
             Err(error) => {
                 if !silent {
-                    print_error_message(&format!("Error: {}", error));
+                    print_error_message(&format!("Error: {error}"));
                 }
 
                 exit_code = 1;

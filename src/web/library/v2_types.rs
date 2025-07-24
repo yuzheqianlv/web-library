@@ -45,9 +45,9 @@ pub struct LibraryRecord {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum RecordStatus {
-    Success,   // 翻译成功
-    Pending,   // 处理中
-    Error,     // 处理失败
+    Success, // 翻译成功
+    Pending, // 处理中
+    Error,   // 处理失败
 }
 
 /// 缓存类型枚举
@@ -55,9 +55,9 @@ pub enum RecordStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum CacheType {
-    Permanent,  // 永久缓存
-    Temporary,  // 临时缓存
-    Manual,     // 手动缓存
+    Permanent, // 永久缓存
+    Temporary, // 临时缓存
+    Manual,    // 手动缓存
 }
 
 /// 分页信息
@@ -271,20 +271,24 @@ pub struct ApiError {
 
 // 默认值函数
 #[cfg(feature = "web")]
-fn default_page() -> i32 { 1 }
+fn default_page() -> i32 {
+    1
+}
 
 #[cfg(feature = "web")]
-fn default_page_size() -> i32 { 20 }
+fn default_page_size() -> i32 {
+    20
+}
 
 // 参数验证规则
 #[cfg(feature = "web")]
 pub struct ValidationRules {
-    pub max_page_size: i32,      // 最大100
-    pub min_page_size: i32,      // 最小1
-    pub max_page: i32,           // 最大10000
-    pub max_batch_size: i32,     // 批量操作最大1000个
-    pub min_search_length: i32,  // 搜索关键词最短2字符
-    pub max_search_length: i32,  // 搜索关键词最长100字符
+    pub max_page_size: i32,     // 最大100
+    pub min_page_size: i32,     // 最小1
+    pub max_page: i32,          // 最大10000
+    pub max_batch_size: i32,    // 批量操作最大1000个
+    pub min_search_length: i32, // 搜索关键词最短2字符
+    pub max_search_length: i32, // 搜索关键词最长100字符
 }
 
 #[cfg(feature = "web")]
@@ -312,7 +316,7 @@ impl LibraryListQuery {
         if self.page > rules.max_page {
             return Err(format!("页码不能超过{}", rules.max_page));
         }
-        
+
         // 验证每页大小
         if self.page_size < rules.min_page_size {
             return Err(format!("每页大小不能小于{}", rules.min_page_size));
@@ -320,7 +324,7 @@ impl LibraryListQuery {
         if self.page_size > rules.max_page_size {
             return Err(format!("每页大小不能超过{}", rules.max_page_size));
         }
-        
+
         // 验证搜索关键词
         if let Some(ref search) = self.search {
             if search.len() < rules.min_search_length as usize {
@@ -330,14 +334,14 @@ impl LibraryListQuery {
                 return Err(format!("搜索关键词长度不能超过{}", rules.max_search_length));
             }
         }
-        
+
         // 验证日期范围
         if let (Some(from), Some(to)) = (&self.date_from, &self.date_to) {
             if from > to {
                 return Err("开始日期不能晚于结束日期".to_string());
             }
         }
-        
+
         Ok(())
     }
 }

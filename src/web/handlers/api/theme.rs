@@ -1,12 +1,12 @@
 //! 主题API处理器
-//! 
+//!
 //! 提供主题相关的REST API接口
 
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::Json,
     response::Html,
+    response::Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -68,9 +68,13 @@ impl<T> ApiResponse<T> {
 pub async fn get_themes(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<ThemeListResponse>>, StatusCode> {
-    let manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
-    let themes = manager.get_themes()
+    let manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let themes = manager
+        .get_themes()
         .into_iter()
         .map(|theme| ThemeInfo {
             name: theme.name.clone(),
@@ -80,7 +84,8 @@ pub async fn get_themes(
         })
         .collect();
 
-    let current_theme = manager.get_current_theme()
+    let current_theme = manager
+        .get_current_theme()
         .map(|t| t.name.clone())
         .unwrap_or_else(|| "light".to_string());
 
@@ -97,10 +102,16 @@ pub async fn get_theme(
     Path(theme_name): Path<String>,
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<ThemeConfig>>, StatusCode> {
-    let manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     match manager.get_theme(&theme_name) {
-        Some(theme) => Ok(Json(ApiResponse::success(theme.clone(), "获取主题配置成功"))),
+        Some(theme) => Ok(Json(ApiResponse::success(
+            theme.clone(),
+            "获取主题配置成功",
+        ))),
         None => {
             let error: ApiResponse<ThemeConfig> = ApiResponse {
                 success: false,
@@ -117,10 +128,16 @@ pub async fn set_theme(
     State(app_state): State<Arc<AppState>>,
     Json(request): Json<SetThemeRequest>,
 ) -> Result<Json<ApiResponse<()>>, StatusCode> {
-    let mut manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let mut manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     match manager.set_current_theme(&request.theme) {
-        Ok(()) => Ok(Json(ApiResponse::success((), format!("主题已切换为 '{}'", request.theme)))),
+        Ok(()) => Ok(Json(ApiResponse::success(
+            (),
+            format!("主题已切换为 '{}'", request.theme),
+        ))),
         Err(err) => {
             let error: ApiResponse<()> = ApiResponse {
                 success: false,
@@ -137,8 +154,11 @@ pub async fn get_theme_css(
     Path(theme_name): Path<String>,
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Html<String>, StatusCode> {
-    let manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     if manager.get_theme(&theme_name).is_none() {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -151,8 +171,11 @@ pub async fn get_theme_css(
 pub async fn get_current_theme_css(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Html<String>, StatusCode> {
-    let manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let css = manager.generate_css_variables(None);
     Ok(Html(css))
 }
@@ -161,8 +184,11 @@ pub async fn get_current_theme_css(
 pub async fn get_theme_selector(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Html<String>, StatusCode> {
-    let manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let html = manager.generate_theme_selector();
     Ok(Html(html))
 }
@@ -171,8 +197,11 @@ pub async fn get_theme_selector(
 pub async fn get_theme_script(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Html<String>, StatusCode> {
-    let manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let script = format!(
         r#"<script type="text/javascript">
 {}
@@ -187,8 +216,11 @@ pub async fn register_theme(
     State(app_state): State<Arc<AppState>>,
     Json(theme_config): Json<ThemeConfig>,
 ) -> Result<Json<ApiResponse<()>>, StatusCode> {
-    let mut manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let mut manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     // 验证主题配置
     if theme_config.name.is_empty() {
         let error: ApiResponse<()> = ApiResponse {
@@ -200,7 +232,10 @@ pub async fn register_theme(
     }
 
     manager.register_theme(theme_config.clone());
-    Ok(Json(ApiResponse::success((), format!("主题 '{}' 注册成功", theme_config.name))))
+    Ok(Json(ApiResponse::success(
+        (),
+        format!("主题 '{}' 注册成功", theme_config.name),
+    )))
 }
 
 /// 删除自定义主题
@@ -208,10 +243,16 @@ pub async fn delete_theme(
     Path(theme_name): Path<String>,
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<()>>, StatusCode> {
-    let mut manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let mut manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     match manager.remove_theme(&theme_name) {
-        Ok(()) => Ok(Json(ApiResponse::success((), format!("主题 '{}' 删除成功", theme_name)))),
+        Ok(()) => Ok(Json(ApiResponse::success(
+            (),
+            format!("主题 '{}' 删除成功", theme_name),
+        ))),
         Err(err) => {
             let error: ApiResponse<()> = ApiResponse {
                 success: false,
@@ -237,7 +278,7 @@ pub async fn set_user_preference(
 ) -> Result<Json<ApiResponse<()>>, StatusCode> {
     // 这里可以将用户偏好保存到数据库或缓存
     // 目前只是验证并返回成功
-    
+
     if preference.preferred_theme.is_empty() {
         let error: ApiResponse<()> = ApiResponse {
             success: false,
@@ -255,12 +296,29 @@ pub async fn auto_switch_theme(
     State(app_state): State<Arc<AppState>>,
     Json(request): Json<AutoSwitchRequest>,
 ) -> Result<Json<ApiResponse<()>>, StatusCode> {
-    let mut manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
-    let target_theme = if request.is_dark_mode { "dark" } else { "light" };
-    
+    let mut manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let target_theme = if request.is_dark_mode {
+        "dark"
+    } else {
+        "light"
+    };
+
     match manager.set_current_theme(target_theme) {
-        Ok(()) => Ok(Json(ApiResponse::success((), format!("已自动切换到{}主题", if request.is_dark_mode { "暗色" } else { "明亮" })))),
+        Ok(()) => Ok(Json(ApiResponse::success(
+            (),
+            format!(
+                "已自动切换到{}主题",
+                if request.is_dark_mode {
+                    "暗色"
+                } else {
+                    "明亮"
+                }
+            ),
+        ))),
         Err(err) => {
             let error: ApiResponse<()> = ApiResponse {
                 success: false,
@@ -283,15 +341,18 @@ pub async fn preview_theme(
     Path(theme_name): Path<String>,
     State(app_state): State<Arc<AppState>>,
 ) -> Result<Html<String>, StatusCode> {
-    let manager = app_state.theme_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let manager = app_state
+        .theme_manager
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let theme = match manager.get_theme(&theme_name) {
         Some(t) => t,
         None => return Err(StatusCode::NOT_FOUND),
     };
 
     let css_variables = manager.generate_css_variables(Some(&theme_name));
-    
+
     let preview_html = format!(
         r#"<!DOCTYPE html>
 <html lang="zh-CN">
@@ -420,9 +481,13 @@ pub async fn preview_theme(
         theme.display_name,
         theme.description,
         theme.name,
-        if theme.is_dark { "暗色主题" } else { "明亮主题" },
+        if theme.is_dark {
+            "暗色主题"
+        } else {
+            "明亮主题"
+        },
         theme.colors.primary
     );
-    
+
     Ok(Html(preview_html))
 }

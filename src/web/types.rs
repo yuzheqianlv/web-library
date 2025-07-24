@@ -93,7 +93,6 @@ pub struct BookmarkletResponse {
     pub example_usage: String,
 }
 
-
 // 非 web feature 的占位类型
 #[cfg(not(feature = "web"))]
 #[derive(Clone)]

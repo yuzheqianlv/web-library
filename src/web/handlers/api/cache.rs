@@ -24,7 +24,7 @@ pub async fn get_cache_stats(
                     enabled: true,
                     total_keys: count as usize,
                     total_size_bytes: 0, // MongoDB doesn't easily provide size info
-                    expired_keys: 0, // No expiration in current implementation
+                    expired_keys: 0,     // No expiration in current implementation
                 };
                 Ok(Json(response))
             }
@@ -55,7 +55,7 @@ pub async fn clear_cache(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if let Some(ref collection) = state.mongo_collection {
         use mongodb::bson::doc;
-        
+
         let delete_result = if let (Some(url), Some(source_lang), Some(target_lang)) =
             (request.url, request.source_lang, request.target_lang)
         {

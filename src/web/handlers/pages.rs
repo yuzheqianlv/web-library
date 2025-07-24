@@ -1,7 +1,7 @@
 //! 页面处理器
 
 #[cfg(feature = "web")]
-use axum::{extract::Path, response::Html, http::StatusCode, extract::State};
+use axum::{extract::Path, extract::State, http::StatusCode, response::Html};
 
 use crate::web::{templates, types::AppState};
 use std::sync::Arc;
@@ -143,21 +143,20 @@ async fn get_html_from_cache(
     id: &str,
 ) -> Result<Option<String>, mongodb::error::Error> {
     use mongodb::bson::{doc, oid::ObjectId};
-    
+
     // 检查MongoDB客户端是否可用
     let mongodb_client = match mongodb_client {
         Some(client) => client,
         None => return Ok(None),
     };
-    
+
     // 解析ObjectId
-    let object_id = ObjectId::parse_str(id).map_err(|_| {
-        mongodb::error::Error::custom("Invalid ObjectId format".to_string())
-    })?;
-    
+    let object_id = ObjectId::parse_str(id)
+        .map_err(|_| mongodb::error::Error::custom("Invalid ObjectId format".to_string()))?;
+
     let db = mongodb_client.database("monolith");
     let collection = db.collection::<mongodb::bson::Document>("html_cache");
-    
+
     // 查询记录
     let filter = doc! { "_id": object_id };
     if let Some(document) = collection.find_one(filter).await? {
@@ -168,7 +167,7 @@ async fn get_html_from_cache(
             return Ok(Some(original_html.to_string()));
         }
     }
-    
+
     Ok(None)
 }
 
@@ -176,16 +175,16 @@ async fn get_html_from_cache(
 #[cfg(feature = "web")]
 async fn check_translated_cache(state: &AppState, url: &str) -> Option<String> {
     use mongodb::bson::doc;
-    
+
     // 检查MongoDB客户端是否可用
     let mongodb_client = state.mongo_client.as_ref()?;
-    
+
     let db = mongodb_client.database("monolith");
     let collection = db.collection::<mongodb::bson::Document>("html_cache");
-    
+
     // 查询该URL的翻译记录
     let filter = doc! { "url": url };
-    
+
     if let Ok(Some(document)) = collection.find_one(filter).await {
         // 优先返回翻译后的HTML
         if let Ok(translated_html) = document.get_str("translated_html") {
@@ -194,7 +193,7 @@ async fn check_translated_cache(state: &AppState, url: &str) -> Option<String> {
             }
         }
     }
-    
+
     None
 }
 

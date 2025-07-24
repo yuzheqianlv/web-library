@@ -7,14 +7,14 @@
 
 #[cfg(test)]
 mod passing {
-    use monolith::core::{format_output_path, MonolithOutputFormat};
+    use monolith::core::format_output_path;
 
     #[test]
     fn as_is() {
         let final_destination = format_output_path(
             "/home/username/Downloads/website.html",
-            "",
-            MonolithOutputFormat::HTML,
+            Some(""),
+            false,
         );
 
         assert_eq!(final_destination, "/home/username/Downloads/website.html");
@@ -24,8 +24,8 @@ mod passing {
     fn substitute_title() {
         let final_destination = format_output_path(
             "/home/username/Downloads/%title%.html",
-            "Document Title",
-            MonolithOutputFormat::HTML,
+            Some("Document Title"),
+            false,
         );
 
         assert_eq!(
@@ -38,8 +38,8 @@ mod passing {
     fn substitute_title_multi() {
         let final_destination = format_output_path(
             "/home/username/Downloads/%title%/%title%.html",
-            "Document Title",
-            MonolithOutputFormat::HTML,
+            Some("Document Title"),
+            false,
         );
 
         assert_eq!(
@@ -52,8 +52,8 @@ mod passing {
     fn sanitize() {
         let final_destination = format_output_path(
             r#"/home/username/Downloads/<>:"|?/%title%.html"#,
-            r#"/\<>:"|?"#,
-            MonolithOutputFormat::HTML,
+            Some(r#"/\<>:"|?"#),
+            false,
         );
 
         assert_eq!(
@@ -65,7 +65,7 @@ mod passing {
     #[test]
     fn level_up() {
         let final_destination =
-            format_output_path("../%title%.html", ".Title", MonolithOutputFormat::HTML);
+            format_output_path("../%title%.html", Some(".Title"), false);
 
         assert_eq!(final_destination, r#"../Title.html"#);
     }
@@ -73,7 +73,7 @@ mod passing {
     #[test]
     fn file_name_extension() {
         let final_destination =
-            format_output_path("%title%.%extension%", "Title", MonolithOutputFormat::HTML);
+            format_output_path("%title%.%extension%", Some("Title"), false);
 
         assert_eq!(final_destination, r#"Title.html"#);
     }
@@ -81,7 +81,7 @@ mod passing {
     #[test]
     fn file_name_extension_mhtml() {
         let final_destination =
-            format_output_path("%title%.%extension%", "Title", MonolithOutputFormat::MHTML);
+            format_output_path("%title%.%extension%", Some("Title"), true);
 
         assert_eq!(final_destination, r#"Title.mhtml"#);
     }
@@ -89,7 +89,7 @@ mod passing {
     #[test]
     fn file_name_extension_short() {
         let final_destination =
-            format_output_path("%title%.%ext%", "Title", MonolithOutputFormat::HTML);
+            format_output_path("%title%.%ext%", Some("Title"), false);
 
         assert_eq!(final_destination, r#"Title.htm"#);
     }
@@ -97,7 +97,7 @@ mod passing {
     #[test]
     fn file_name_extension_short_mhtml() {
         let final_destination =
-            format_output_path("%title%.%ext%", "Title", MonolithOutputFormat::MHTML);
+            format_output_path("%title%.%ext%", Some("Title"), true);
 
         assert_eq!(final_destination, r#"Title.mht"#);
     }
