@@ -2,8 +2,6 @@
 //
 // 提供测试辅助工具和共享功能
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
 use monolith::translation::config::{TranslationConfig, constants};
@@ -13,7 +11,7 @@ use monolith::translation::pipeline::batch::{BatchManager, BatchManagerConfig};
 use monolith::translation::pipeline::filters::TextFilter;
 
 use html5ever::parse_document;
-use markup5ever_rcdom::{RcDom, Handle};
+use markup5ever_rcdom::RcDom;
 use html5ever::tendril::TendrilSink;
 use std::io::Cursor;
 
@@ -153,6 +151,39 @@ impl TestEnvironment {
             .build();
         
         Self::new(config)
+    }
+    
+    // 添加引用访问方法，避免使用clone
+    pub fn get_batch_manager(&self) -> &BatchManager {
+        &self.batch_manager
+    }
+    
+    pub fn get_batch_manager_mut(&mut self) -> &mut BatchManager {
+        &mut self.batch_manager
+    }
+    
+    pub fn get_text_filter(&self) -> &TextFilter {
+        &self.text_filter
+    }
+    
+    pub fn get_text_filter_mut(&mut self) -> &mut TextFilter {
+        &mut self.text_filter
+    }
+    
+    pub fn get_text_collector(&self) -> &TextCollector {
+        &self.text_collector
+    }
+    
+    pub fn get_text_collector_mut(&mut self) -> &mut TextCollector {
+        &mut self.text_collector
+    }
+    
+    pub fn get_cache_manager(&self) -> &CacheManager {
+        &self.cache_manager
+    }
+    
+    pub fn get_cache_manager_mut(&mut self) -> &mut CacheManager {
+        &mut self.cache_manager
     }
 }
 

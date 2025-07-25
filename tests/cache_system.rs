@@ -6,7 +6,7 @@ use std::time::Duration;
 use std::sync::Arc;
 
 use monolith::translation::storage::cache::{
-    CacheManager, CacheConfig, CacheKey, CacheEntry, CacheStats
+    CacheManager, CacheConfig, CacheKey, CacheEntry
 };
 
 mod common {
@@ -14,8 +14,7 @@ mod common {
 }
 
 use common::{
-    TestEnvironment, TestConfigBuilder, TestDataGenerator,
-    PerformanceHelper, AssertionHelper
+    TestDataGenerator, PerformanceHelper
 };
 
 /// 测试基本缓存操作

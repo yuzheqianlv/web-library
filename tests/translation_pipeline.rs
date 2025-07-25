@@ -4,18 +4,16 @@
 
 use std::time::Duration;
 
-use monolith::translation::pipeline::collector::{TextItem, TextPriority, TextType};
-use monolith::translation::pipeline::batch::{Batch, BatchType, BatchPriority};
+use monolith::translation::pipeline::collector::{TextItem, TextPriority};
+use monolith::translation::pipeline::batch::{Batch, BatchPriority};
 use monolith::translation::storage::cache::{CacheKey, CacheEntry};
-
-use std::path::PathBuf;
 
 mod common {
     include!("common/mod.rs");
 }
 
 use common::{
-    TestEnvironment, TestConfigBuilder, HtmlTestHelper, TestDataGenerator,
+    TestEnvironment, HtmlTestHelper, TestDataGenerator,
     PerformanceHelper, AssertionHelper
 };
 
@@ -65,14 +63,14 @@ async fn test_complete_text_collection_pipeline() {
 /// 测试文本过滤和优先级排序
 #[tokio::test]
 async fn test_text_filtering_and_prioritization() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 创建混合内容的HTML
     let html = HtmlTestHelper::create_mixed_language_page();
     let dom = HtmlTestHelper::create_test_dom(&html);
     
     // 收集文本
-    let mut texts = env.text_collector
+    let texts = env.get_text_collector_mut()
         .collect_translatable_texts(&dom.document)
         .expect("Text collection should succeed");
     
@@ -108,7 +106,7 @@ async fn test_text_filtering_and_prioritization() {
 /// 测试智能批次创建和管理
 #[tokio::test]
 async fn test_intelligent_batch_creation() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 创建测试文本项
     let test_items = TestDataGenerator::create_priority_mixed_items();
@@ -118,11 +116,11 @@ async fn test_intelligent_batch_creation() {
     
     // 测试批次创建
     let (batches, batch_time) = PerformanceHelper::measure_time(|| {
-        let mut batch_manager = env.batch_manager.clone();
-        batch_manager.create_batches(all_items)
+        env.get_batch_manager_mut().create_batches(all_items)
     });
     
-    let batches = batches.expect("Batch creation should succeed");
+    // create_batches returns Vec<Batch>, not Result
+    let batches = batches;
     
     // 验证批次结果
     assert!(!batches.is_empty(), "Should create at least one batch");
@@ -192,7 +190,7 @@ async fn test_cache_system_integration() {
 /// 测试复杂页面的完整处理流程
 #[tokio::test]
 async fn test_complex_page_processing() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 创建复杂HTML页面
     let html = HtmlTestHelper::create_complex_page();
@@ -201,7 +199,7 @@ async fn test_complex_page_processing() {
     // 完整处理流程测试
     let (processing_result, total_time) = PerformanceHelper::measure_async_time(|| async {
         // 1. 文本收集
-        let texts = env.text_collector
+        let texts = env.get_text_collector_mut()
             .collect_translatable_texts(&dom.document)?;
         
         // 2. 文本过滤
@@ -210,8 +208,7 @@ async fn test_complex_page_processing() {
             .collect();
         
         // 3. 批次创建
-        let mut batch_manager = env.batch_manager.clone();
-        let batches = batch_manager.create_batches(filtered_texts)?;
+        let batches = env.get_batch_manager_mut().create_batches(filtered_texts);
         
         // 4. 模拟缓存操作
         let mut cache_hits = 0;
@@ -242,7 +239,7 @@ async fn test_complex_page_processing() {
         )
     }).await;
     
-    let (batches, cache_hits) = processing_result.expect("Processing should succeed");
+    let (batches, _cache_hits) = processing_result.expect("Processing should succeed");
     
     // 验证处理结果
     assert!(!batches.is_empty(), "Should create batches for complex page");
@@ -267,11 +264,11 @@ async fn test_complex_page_processing() {
 /// 测试错误处理和恢复
 #[tokio::test]
 async fn test_error_handling_and_recovery() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 测试空HTML处理
     let empty_dom = HtmlTestHelper::create_test_dom("");
-    let empty_result = env.text_collector.collect_translatable_texts(&empty_dom.document);
+    let empty_result = env.get_text_collector_mut().collect_translatable_texts(&empty_dom.document);
     assert!(empty_result.is_ok(), "Should handle empty HTML gracefully");
     
     let empty_texts = empty_result.unwrap();
@@ -283,10 +280,7 @@ async fn test_error_handling_and_recovery() {
     assert!(cache_result.is_ok(), "Should handle invalid cache keys gracefully");
     
     // 测试空批次处理
-    let empty_batches = env.batch_manager.clone().create_batches(vec![]);
-    assert!(empty_batches.is_ok(), "Should handle empty text list gracefully");
-    
-    let batches = empty_batches.unwrap();
+    let batches = env.get_batch_manager_mut().create_batches(vec![]);
     assert!(batches.is_empty(), "Empty input should yield no batches");
     
     // 测试极长文本处理
@@ -346,18 +340,18 @@ async fn test_concurrent_operations() {
 /// 性能基准测试
 #[tokio::test]
 async fn test_performance_benchmarks() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 测试大量文本项的批次处理性能
     let large_text_set = TestDataGenerator::create_test_text_items(1000);
     
-    let batch_result = PerformanceHelper::assert_performance(
-        || env.batch_manager.clone().create_batches(large_text_set),
+    let batches = PerformanceHelper::assert_performance(
+        || env.get_batch_manager_mut().create_batches(large_text_set),
         Duration::from_millis(500),
         "Large batch creation"
     );
     
-    let batches = batch_result.expect("Large batch creation should succeed");
+    // create_batches returns Vec<Batch>, not Result
     assert!(!batches.is_empty(), "Should create batches for large text set");
     
     // 测试大量缓存操作性能

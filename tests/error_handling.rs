@@ -4,9 +4,10 @@
 
 use std::time::Duration;
 
-use monolith::translation::error::{TranslationError, TranslationResult};
+use monolith::translation::error::TranslationError;
 use monolith::translation::storage::cache::{CacheKey, CacheEntry};
 use monolith::translation::pipeline::collector::TextItem;
+use monolith::translation::pipeline::filters::TextFilter;
 
 mod common {
     include!("common/mod.rs");
@@ -14,13 +15,13 @@ mod common {
 
 use common::{
     TestEnvironment, TestConfigBuilder, HtmlTestHelper, TestDataGenerator,
-    PerformanceHelper, AssertionHelper
+    PerformanceHelper
 };
 
 /// 测试无效HTML输入的错误处理
 #[tokio::test]
 async fn test_invalid_html_error_handling() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 测试各种无效HTML输入
     let invalid_html_cases = vec![
@@ -37,7 +38,7 @@ async fn test_invalid_html_error_handling() {
         let dom = HtmlTestHelper::create_test_dom(html);
         
         // 文本收集应该处理无效HTML而不崩溃
-        let collection_result = env.text_collector.collect_translatable_texts(&dom.document);
+        let collection_result = env.get_text_collector_mut().collect_translatable_texts(&dom.document);
         
         match collection_result {
             Ok(texts) => {
@@ -89,13 +90,10 @@ async fn test_cache_system_error_recovery() {
 /// 测试批次管理器的错误处理
 #[tokio::test]
 async fn test_batch_manager_error_handling() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 测试空文本列表
-    let empty_batch_result = env.batch_manager.clone().create_batches(vec![]);
-    assert!(empty_batch_result.is_ok(), "Should handle empty text list gracefully");
-    
-    let empty_batches = empty_batch_result.unwrap();
+    let empty_batches = env.get_batch_manager_mut().create_batches(vec![]);
     assert!(empty_batches.is_empty(), "Empty input should yield no batches");
     
     // 测试包含无效文本的列表
@@ -109,10 +107,7 @@ async fn test_batch_manager_error_handling() {
         TextItem::content("Valid text".to_string(), handle.clone(), 0), // 正常文本
     ];
     
-    let batch_result = env.batch_manager.clone().create_batches(problematic_items);
-    assert!(batch_result.is_ok(), "Should handle problematic text items gracefully");
-    
-    let batches = batch_result.unwrap();
+    let batches = env.get_batch_manager_mut().create_batches(problematic_items);
     // 应该至少处理正常的文本项
     assert!(!batches.is_empty(), "Should create batches for valid items");
     
@@ -126,12 +121,13 @@ async fn test_text_filter_boundary_cases() {
     let env = TestEnvironment::default();
     
     // 测试各种边界情况文本
+    let long_text = "A".repeat(100000);
     let boundary_cases = vec![
         "",                                      // 空字符串
         " ",                                     // 只有空格
         "\n\t\r",                               // 只有空白字符
         "a",                                     // 单字符
-        "A".repeat(100000),                      // 超长文本
+        &long_text,                              // 超长文本
         "🚀🎉🌟",                                 // 只有emoji
         "12345",                                 // 只有数字
         "!@#$%^&*()",                           // 只有符号
@@ -157,11 +153,13 @@ async fn test_text_filter_boundary_cases() {
         let analysis = env.text_filter.analyze_text(text);
         assert_eq!(analysis.original_text, *text, "Analysis should preserve original text");
         
+        let display_text = if text.len() > 20 { 
+                format!("{}...", &text[..20]) 
+            } else { 
+                text.to_string() 
+            };
         println!("✅ Boundary case {}: '{}' -> translate: {}, score: {:.2}", 
-                 i, 
-                 if text.len() > 20 { &format!("{}...", &text[..20]) } else { text },
-                 should_translate, 
-                 score);
+                 i, display_text, should_translate, score);
     }
 }
 
@@ -175,7 +173,8 @@ async fn test_concurrent_error_scenarios() {
     
     for task_id in 0..20 {
         let cache_manager = env.cache_manager.clone();
-        let text_filter = env.text_filter.clone();
+        // Use a separate filter instance for each task to avoid lifetime issues
+        let text_filter = TextFilter::new();
         
         let handle = tokio::spawn(async move {
             let mut local_errors = 0;
@@ -259,20 +258,17 @@ async fn test_resource_exhaustion_handling() {
         .with_small_batches() // 小批次
         .build();
     
-    let env = TestEnvironment::new(config);
+    let mut env = TestEnvironment::new(config);
     
     // 尝试处理大量文本项
     let large_text_set = TestDataGenerator::create_test_text_items(1000);
     
     // 批次处理应该能处理大量数据而不崩溃
-    let batch_result = PerformanceHelper::assert_performance(
-        || env.batch_manager.clone().create_batches(large_text_set.clone()),
+    let batches = PerformanceHelper::assert_performance(
+        || env.get_batch_manager_mut().create_batches(large_text_set.clone()),
         Duration::from_secs(5), // 给予足够时间但不能无限等待
         "Large dataset batch processing"
     );
-    
-    assert!(batch_result.is_ok(), "Should handle large dataset gracefully");
-    let batches = batch_result.unwrap();
     assert!(!batches.is_empty(), "Should create batches even for large dataset");
     
     // 测试缓存在大量数据下的表现
@@ -309,7 +305,7 @@ async fn test_resource_exhaustion_handling() {
 /// 测试错误传播和恢复机制
 #[tokio::test]
 async fn test_error_propagation_and_recovery() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 创建一个会导致各种错误的复杂场景
     let complex_html = r#"
@@ -331,7 +327,7 @@ async fn test_error_propagation_and_recovery() {
     // 完整的处理流程应该能够从各种错误中恢复
     let processing_result = async {
         // 1. 文本收集 - 可能遇到无效元素
-        let texts = env.text_collector.collect_translatable_texts(&dom.document)?;
+        let texts = env.get_text_collector_mut().collect_translatable_texts(&dom.document)?;
         
         // 2. 过滤 - 可能遇到边界情况文本
         let filtered_texts: Vec<TextItem> = texts.into_iter()
@@ -339,7 +335,7 @@ async fn test_error_propagation_and_recovery() {
             .collect();
         
         // 3. 批次创建 - 可能遇到无效文本项
-        let batches = env.batch_manager.clone().create_batches(filtered_texts)?;
+        let batches = env.get_batch_manager_mut().create_batches(filtered_texts);
         
         // 4. 模拟缓存操作 - 可能遇到各种缓存错误
         let mut cache_operations = 0;
@@ -395,14 +391,14 @@ async fn test_error_propagation_and_recovery() {
     let cache_stats = env.cache_manager.get_stats();
     assert!(cache_stats.total_entries >= 0, "Cache should remain in valid state after errors");
     
-    let collector_stats = env.text_collector.get_stats();
+    let collector_stats = env.get_text_collector_mut().get_stats();
     assert!(collector_stats.nodes_visited >= 0, "Collector should remain in valid state");
 }
 
 /// 测试长时间运行的稳定性
 #[tokio::test]
 async fn test_long_running_stability() {
-    let env = TestEnvironment::default();
+    let mut env = TestEnvironment::default();
     
     // 模拟长时间运行的操作
     let duration = Duration::from_secs(2); // 较短的测试时间
@@ -424,38 +420,38 @@ async fn test_long_running_stability() {
         let dom = HtmlTestHelper::create_test_dom(&html);
         
         // 执行完整的处理循环
-        match env.text_collector.collect_translatable_texts(&dom.document) {
+        match env.get_text_collector_mut().collect_translatable_texts(&dom.document) {
             Ok(texts) => {
                 let filtered: Vec<_> = texts.into_iter()
                     .filter(|t| env.text_filter.should_translate(&t.text))
                     .collect();
                 
                 if !filtered.is_empty() {
-                    match env.batch_manager.clone().create_batches(filtered) {
-                        Ok(batches) => {
-                            // 模拟缓存操作
-                            for batch in batches.iter().take(2) { // 限制操作数量以加速测试
-                                for item in batch.items.iter().take(3) {
-                                    let key = CacheKey::new(
-                                        item.text.clone(),
-                                        "en".to_string(),
-                                        "zh".to_string(),
-                                    );
-                                    
-                                    let entry = CacheEntry::new(
-                                        item.text.clone(),
-                                        format!("翻译{}", operation_count),
-                                        Some(Duration::from_secs(60)),
-                                    );
-                                    
-                                    if env.cache_manager.put(key.clone(), entry).await.is_ok() {
-                                        let _ = env.cache_manager.get(&key).await;
-                                    }
+                    let batches = env.get_batch_manager_mut().create_batches(filtered);
+                    if !batches.is_empty() {
+                        // 模拟缓存操作
+                        for batch in batches.iter().take(2) { // 限制操作数量以加速测试
+                            for item in batch.items.iter().take(3) {
+                                let key = CacheKey::new(
+                                    item.text.clone(),
+                                    "en".to_string(),
+                                    "zh".to_string(),
+                                );
+                                
+                                let entry = CacheEntry::new(
+                                    item.text.clone(),
+                                    format!("翻译{}", operation_count),
+                                    Some(Duration::from_secs(60)),
+                                );
+                                
+                                if env.cache_manager.put(key.clone(), entry).await.is_ok() {
+                                    let _ = env.cache_manager.get(&key).await;
                                 }
                             }
-                            operation_count += 1;
                         }
-                        Err(_) => error_count += 1,
+                        operation_count += 1;
+                    } else {
+                        error_count += 1;
                     }
                 }
             }

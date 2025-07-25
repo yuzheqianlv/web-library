@@ -203,7 +203,7 @@ impl TextFilter {
     }
 
     /// 检查是否已经是中文
-    fn is_already_chinese(&self, text: &str) -> bool {
+    pub fn is_already_chinese(&self, text: &str) -> bool {
         let chinese_chars = text
             .chars()
             .filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c))
