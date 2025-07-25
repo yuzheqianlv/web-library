@@ -1,0 +1,559 @@
+/* Monolith 网页翻译器 - 基础样式文件 */
+/* 整合自 main.css - 提供核心布局和基础样式 */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background: #f5f5f5;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 置顶导航栏 */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: white;
+    border-bottom: 1px solid #e1e5e9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    gap: 1rem;
+    transition: transform 0.3s ease;
+    z-index: 1000;
+}
+
+.navbar.hidden {
+    transform: translateY(-100%);
+}
+
+/* 隐藏/显示导航栏按钮 */
+.toggle-nav-btn {
+    width: 40px;
+    height: 40px;
+    background: #667eea;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.toggle-nav-btn:hover {
+    background: #5a6fd8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.toggle-nav-btn:active {
+    transform: translateY(0);
+}
+
+.toggle-nav-btn svg {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease;
+}
+
+.toggle-nav-btn:hover svg {
+    transform: scale(1.1);
+}
+
+/* URL 输入框 */
+.url-input {
+    flex: 1;
+    height: 40px;
+    padding: 0 1rem;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* 翻译按钮 */
+.translate-btn {
+    height: 40px;
+    padding: 0 1.5rem;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    flex-shrink: 0;
+}
+
+.translate-btn:hover:not(:disabled) {
+    background: #5a6fd8;
+}
+
+.translate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 模式切换按钮组 */
+.mode-toggle {
+    display: flex;
+    background: #f8f9fa;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.mode-btn {
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    white-space: nowrap;
+}
+
+.mode-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+.mode-btn:hover:not(.active) {
+    background: #e9ecef;
+}
+
+/* 导航按钮组 */
+.nav-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    color: #666;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    position: relative;
+    border: 1px solid #e1e5e9;
+}
+
+.nav-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    border-color: #667eea;
+}
+
+.nav-btn svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.nav-btn span {
+    display: none; /* 隐藏文字，使用工具提示代替 */
+}
+
+/* 翻译库按钮特殊样式 */
+.library-btn {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.library-btn:hover {
+    background: #218838;
+    color: white;
+    border-color: #218838;
+}
+
+/* 书签脚本链接 */
+.bookmarklet-link {
+    width: 40px;
+    height: 40px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    color: #666;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.bookmarklet-link:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* 主内容区域 */
+.main-content {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transition: top 0.3s ease;
+    z-index: 1;
+}
+
+.main-content.nav-hidden {
+    top: 0;
+}
+
+/* 内容预览区域 */
+.content-viewer {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.content-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+    display: none;
+}
+
+.content-frame.active {
+    display: block;
+}
+
+/* 双语模式 */
+.bilingual-container {
+    width: 100%;
+    height: 100%;
+    display: none;
+    flex-direction: row;
+    position: relative;
+}
+
+.bilingual-container.active {
+    display: flex;
+}
+
+.bilingual-pane {
+    flex: 1;
+    height: calc(100% - 40px); /* 减去标签高度 */
+    border: none;
+    background: white;
+    margin-top: 40px; /* 为标签留出空间 */
+}
+
+.bilingual-pane:first-child {
+    border-right: 1px solid #e1e5e9;
+}
+
+/* 双语模式标签 */
+.bilingual-labels {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    display: flex;
+    z-index: 50;
+    pointer-events: none;
+}
+
+.bilingual-label {
+    flex: 1;
+    background: rgba(248, 249, 250, 0.95);
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #666;
+}
+
+.bilingual-label:first-child {
+    border-right: 1px solid #e1e5e9;
+}
+
+/* 空状态 */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #666;
+    text-align: center;
+}
+
+.empty-state.hidden {
+    display: none;
+}
+
+.empty-state svg {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* 加载状态 */
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: none;
+    z-index: 10;
+}
+
+.loading.show {
+    display: block;
+}
+
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 错误提示 */
+.error-toast {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: #fee;
+    color: #c53030;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    border-left: 4px solid #f56565;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    display: none;
+    z-index: 1000;
+    max-width: 400px;
+}
+
+.error-toast.show {
+    display: block;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 悬浮显示按钮（当导航栏隐藏时） */
+.floating-toggle {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    width: 44px;
+    height: 44px;
+    background: rgba(102, 126, 234, 0.95);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    z-index: 1001;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.floating-toggle:hover {
+    background: rgba(90, 111, 216, 0.95);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
+}
+
+.floating-toggle.show {
+    display: flex;
+    animation: fadeInSlide 0.3s ease;
+}
+
+@keyframes fadeInSlide {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.floating-toggle svg {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease;
+}
+
+.floating-toggle:hover svg {
+    transform: scale(1.1);
+}
+
+/* 工具提示基础样式 */
+.tooltip-base {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1002;
+}
+
+/* 按钮工具提示 */
+.toggle-nav-btn::after,
+.bookmarklet-link::after,
+.nav-btn::after,
+.theme-select::after {
+    content: attr(title);
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1002;
+    bottom: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.floating-toggle::after {
+    content: attr(title);
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1002;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 10px;
+}
+
+.toggle-nav-btn:hover::after,
+.bookmarklet-link:hover::after,
+.floating-toggle:hover::after,
+.nav-btn:hover::after,
+.theme-select:hover::after {
+    opacity: 1;
+}
+
+/* 基础响应式设计 */
+@media (max-width: 768px) {
+    .navbar {
+        padding: 0 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .mode-toggle {
+        order: -1;
+        margin-left: auto;
+    }
+
+    .translate-btn {
+        padding: 0 1rem;
+        font-size: 0.9rem;
+    }
+
+    .nav-actions {
+        gap: 0.25rem;
+    }
+
+    .nav-btn span {
+        display: none;
+    }
+
+    .nav-btn {
+        padding: 0.5rem;
+        min-width: 40px;
+        justify-content: center;
+    }
+
+    .nav-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .bilingual-container {
+        flex-direction: column;
+    }
+
+    .bilingual-pane:first-child {
+        border-right: none;
+        border-bottom: 1px solid #e1e5e9;
+    }
+}

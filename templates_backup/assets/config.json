@@ -1,0 +1,27 @@
+{
+  "version": "2.11.0",
+  "title": "Monolith 网页翻译器",
+  "description": "输入网址，获取完整的双语对照页面",
+  "assets": {
+    "css": [
+      "assets/css/main.css"
+    ],
+    "js": [
+      "assets/js/monolith-translator.js"
+    ]
+  },
+  "api": {
+    "translate": "/api/translate",
+    "content": "/api/content",
+    "cache": {
+      "stats": "/api/cache/stats",
+      "clear": "/api/cache/clear",
+      "cleanup": "/api/cache/cleanup"
+    }
+  },
+  "features": {
+    "syncScrolling": true,
+    "caching": true,
+    "responsiveDesign": true
+  }
+}

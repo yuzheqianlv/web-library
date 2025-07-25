@@ -1,0 +1,608 @@
+/* Monolith 网页翻译器 - 响应式样式文件 */
+/* 整合自 library-responsive.css - 提供全面的响应式设计支持 */
+
+/* ==============================================
+   平板设备 (768px - 1024px)
+   ============================================== */
+
+@media (max-width: 1024px) {
+    .library-container {
+        max-width: 100%;
+        padding: 1.5rem;
+    }
+    
+    .page-header {
+        padding: 1.5rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    /* 表格优化 */
+    .data-table {
+        font-size: 0.9rem;
+    }
+    
+    .mongo-table {
+        min-width: 1000px;
+    }
+}
+
+/* ==============================================
+   移动设备 (最大768px)
+   ============================================== */
+
+@media (max-width: 768px) {
+    /* 容器布局 */
+    .library-container {
+        padding: 1rem;
+    }
+    
+    .page-header {
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .page-title {
+        font-size: 1.75rem;
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+    }
+    
+    .page-subtitle {
+        font-size: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* 统计卡片 */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+    
+    .stat-card {
+        padding: 1rem;
+    }
+    
+    .stat-number {
+        font-size: 1.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.8rem;
+    }
+    
+    /* 工具栏布局 */
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .toolbar-left,
+    .toolbar-right {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .toolbar-right {
+        justify-content: center;
+    }
+    
+    /* 搜索框 */
+    .search-box {
+        min-width: auto;
+        width: 100%;
+        order: -1;
+    }
+    
+    .search-input {
+        padding: 0.75rem 1rem 0.75rem 2.5rem;
+        font-size: 16px; /* 防止iOS缩放 */
+    }
+    
+    /* 筛选器 */
+    .filter-select {
+        flex: 1;
+        min-width: 120px;
+        font-size: 16px; /* 防止iOS缩放 */
+    }
+    
+    /* 按钮适配 */
+    .btn {
+        font-size: 0.9rem;
+        padding: 0.75rem 1rem;
+    }
+    
+    .btn-sm {
+        font-size: 0.8rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    /* 表格适配 */
+    .table-container,
+    .mongo-table-container {
+        margin-bottom: 1.5rem;
+    }
+    
+    .table-header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .table-title {
+        font-size: 1.1rem;
+    }
+    
+    .table-actions {
+        justify-content: center;
+    }
+    
+    .data-table,
+    .mongo-table {
+        font-size: 0.85rem;
+        min-width: 800px; /* 减少最小宽度 */
+    }
+    
+    .data-table th,
+    .data-table td,
+    .mongo-table th,
+    .mongo-table td {
+        padding: 0.75rem 0.5rem;
+    }
+    
+    /* 表格操作按钮 */
+    .action-buttons {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .action-icon-btn {
+        padding: 0.5rem;
+    }
+    
+    /* 分页组件 */
+    .pagination {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1.5rem;
+    }
+    
+    .pagination-info {
+        order: 1;
+        text-align: center;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .pagination-controls {
+        order: 0;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+    
+    .page-btn {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* 空状态 */
+    .empty-state {
+        padding: 3rem 1rem;
+    }
+    
+    .empty-state svg {
+        width: 60px;
+        height: 60px;
+    }
+}
+
+/* ==============================================
+   小屏幕移动设备 (最大480px)
+   ============================================== */
+
+@media (max-width: 480px) {
+    /* 基础布局 */
+    .library-container {
+        padding: 0.75rem;
+    }
+    
+    .page-header {
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .page-title {
+        font-size: 1.5rem;
+    }
+    
+    .page-subtitle {
+        font-size: 0.95rem;
+    }
+    
+    /* 统计卡片 - 单列布局 */
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .stat-card {
+        padding: 1rem;
+    }
+    
+    /* 工具栏完全垂直布局 */
+    .toolbar {
+        padding: 0.75rem;
+    }
+    
+    .toolbar-left,
+    .toolbar-right {
+        flex-direction: column;
+        width: 100%;
+        gap: 0.75rem;
+    }
+    
+    .toolbar-right .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* 筛选器全宽 */
+    .filter-select {
+        width: 100%;
+    }
+    
+    /* 表格卡片化布局 */
+    .table-container {
+        overflow: visible;
+        box-shadow: none;
+        background: transparent;
+        border-radius: 0;
+    }
+    
+    .table-header {
+        background: var(--color-surface, white);
+        border-radius: var(--border-radius, 8px);
+        margin-bottom: 1rem;
+        box-shadow: var(--shadow-medium, 0 2px 8px rgba(0, 0, 0, 0.1));
+    }
+    
+    /* 卡片式表格布局 */
+    .data-table,
+    .data-table thead,
+    .data-table tbody,
+    .data-table th,
+    .data-table td,
+    .data-table tr {
+        display: block;
+    }
+    
+    .data-table thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+    
+    .data-table tbody tr {
+        background: var(--color-surface, white);
+        border: 1px solid var(--color-border, #e1e5e9);
+        border-radius: var(--border-radius, 8px);
+        margin-bottom: 1rem;
+        padding: 1rem;
+        box-shadow: var(--shadow-small, 0 1px 3px rgba(0, 0, 0, 0.1));
+    }
+    
+    .data-table tbody tr.selected {
+        border-color: var(--color-primary, #667eea);
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    }
+    
+    .data-table td {
+        border: none;
+        position: relative;
+        padding: 0.75rem 0 0.75rem 40%;
+        border-bottom: 1px solid var(--color-border-light, #f1f3f4);
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .data-table td:last-child {
+        border-bottom: none;
+    }
+    
+    .data-table td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 35%;
+        padding: 0.75rem 10px 0 0;
+        white-space: nowrap;
+        font-weight: 600;
+        color: var(--color-text-primary, #333);
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* 复选框特殊处理 */
+    .checkbox-cell {
+        text-align: left;
+        padding: 0.75rem 0;
+        justify-content: flex-start;
+    }
+    
+    .checkbox-cell:before {
+        content: "选择:";
+    }
+    
+    /* URL单元格优化 */
+    .url-cell {
+        max-width: none;
+        white-space: normal;
+        word-break: break-all;
+    }
+    
+    /* HTML内容单元格 */
+    .html-cell {
+        max-width: none;
+        white-space: normal;
+        word-break: break-word;
+        font-size: 0.8rem;
+    }
+    
+    /* 操作按钮优化 */
+    .action-buttons {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-start;
+    }
+    
+    .action-buttons .btn {
+        flex: 1;
+        min-width: auto;
+        font-size: 0.8rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    /* MongoDB表格卡片化 */
+    .mongo-table-container {
+        box-shadow: none;
+        background: transparent;
+    }
+    
+    .mongo-table,
+    .mongo-table thead,
+    .mongo-table tbody,
+    .mongo-table th,
+    .mongo-table td,
+    .mongo-table tr {
+        display: block;
+    }
+    
+    .mongo-table thead {
+        display: none;
+    }
+    
+    .mongo-table tbody tr {
+        background: var(--color-surface, white);
+        border: 1px solid var(--color-border, #dee2e6);
+        border-radius: var(--border-radius, 8px);
+        margin-bottom: 1rem;
+        padding: 1rem;
+        box-shadow: var(--shadow-small, 0 1px 3px rgba(0, 0, 0, 0.1));
+    }
+    
+    .mongo-table td {
+        border: none;
+        position: relative;
+        padding: 0.75rem 0 0.75rem 35%;
+        border-bottom: 1px solid var(--color-border-light, #f1f3f4);
+        display: flex;
+        align-items: center;
+    }
+    
+    .mongo-table td:last-child {
+        border-bottom: none;
+    }
+    
+    .mongo-table td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 30%;
+        padding: 0.75rem 8px 0 0;
+        font-weight: 500;
+        color: var(--color-text-secondary, #666);
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* 分页进一步优化 */
+    .pagination {
+        padding: 1rem;
+    }
+    
+    .pagination-info {
+        font-size: 0.85rem;
+    }
+    
+    .page-size-selector {
+        flex-direction: column;
+        gap: 0.25rem;
+        text-align: center;
+    }
+    
+    .page-size {
+        width: 100px;
+    }
+    
+    .pagination-controls {
+        gap: 0.25rem;
+    }
+    
+    .page-btn {
+        min-width: 40px;
+        min-height: 40px;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    /* 隐藏部分页码，只显示关键页码 */
+    #page-numbers .page-btn:not(.active):not([data-key]) {
+        display: none;
+    }
+    
+    /* 显示当前页及前后各一页 */
+    #page-numbers .page-btn.active,
+    #page-numbers .page-btn.active + .page-btn,
+    #page-numbers .page-btn.active - .page-btn {
+        display: inline-flex;
+    }
+}
+
+/* ==============================================
+   超小屏幕设备 (最大320px)
+   ============================================== */
+
+@media (max-width: 320px) {
+    .library-container {
+        padding: 0.5rem;
+    }
+    
+    .page-header {
+        padding: 0.75rem;
+    }
+    
+    .page-title {
+        font-size: 1.25rem;
+    }
+    
+    .toolbar {
+        padding: 0.5rem;
+    }
+    
+    .btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .search-input,
+    .filter-select {
+        font-size: 16px;
+        padding: 0.5rem 0.75rem 0.5rem 2rem;
+    }
+    
+    .data-table td,
+    .mongo-table td {
+        padding: 0.5rem 0 0.5rem 40%;
+    }
+    
+    .data-table td:before,
+    .mongo-table td:before {
+        width: 35%;
+        font-size: 0.75rem;
+    }
+}
+
+/* ==============================================
+   横屏模式优化
+   ============================================== */
+
+@media (max-height: 480px) and (orientation: landscape) {
+    .page-header {
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .page-title {
+        font-size: 1.5rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .toolbar {
+        padding: 0.75rem;
+    }
+    
+    .empty-state {
+        padding: 2rem 1rem;
+    }
+    
+    .empty-state svg {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+/* ==============================================
+   打印样式
+   ============================================== */
+
+@media print {
+    .navbar,
+    .toolbar,
+    .pagination,
+    .floating-toggle,
+    .sync-indicator,
+    .error-toast,
+    .success-toast {
+        display: none !important;
+    }
+    
+    .main-content {
+        position: static !important;
+        top: auto !important;
+    }
+    
+    .library-container {
+        max-width: none !important;
+        padding: 0 !important;
+    }
+    
+    .page-header {
+        box-shadow: none !important;
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    .table-container,
+    .mongo-table-container {
+        box-shadow: none !important;
+        border: 1px solid #000 !important;
+    }
+    
+    .data-table,
+    .mongo-table {
+        font-size: 10pt !important;
+    }
+    
+    .data-table th,
+    .mongo-table th {
+        background: transparent !important;
+        color: #000 !important;
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    .data-table td,
+    .mongo-table td {
+        background: transparent !important;
+        color: #000 !important;
+    }
+}

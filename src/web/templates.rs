@@ -3,7 +3,7 @@
 /// 生成库管理页面的HTML (使用外部模板文件)
 pub fn library_page() -> String {
     // 使用外部模板文件，而不是内嵌HTML
-    include_str!("../../templates/library.html").to_string()
+    include_str!("../../templates/core/library.html").to_string()
 }
 
 /// 生成库管理页面的HTML (旧版本，保留作为备份)

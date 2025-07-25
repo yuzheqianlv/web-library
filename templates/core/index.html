@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monolith 网页翻译器</title>
+    
+    <!-- 新的CSS文件结构 -->
+    <link rel="stylesheet" href="../assets/css/themes.css">
+    <link rel="stylesheet" href="../assets/css/base.css">
+    <link rel="stylesheet" href="../assets/css/components.css">
+    <link rel="stylesheet" href="../assets/css/responsive.css">
+</head>
+<body class="theme-light">
+    <!-- 置顶导航栏 -->
+    <nav class="navbar" id="navbar">
+        <!-- 隐藏/显示导航栏按钮 -->
+        <button class="toggle-nav-btn" id="toggle-nav-btn" title="隐藏导航栏">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/>
+            </svg>
+        </button>
+
+        <!-- URL 输入框 -->
+        <input type="url" class="url-input" id="url-input" placeholder="输入要翻译的网页URL...">
+
+        <!-- 翻译按钮 -->
+        <button class="translate-btn" id="translate-btn">翻译</button>
+
+        <!-- 模式切换按钮组 -->
+        <div class="mode-toggle">
+            <button class="mode-btn active" data-mode="translated">译文</button>
+            <button class="mode-btn" data-mode="original">原文</button>
+            <button class="mode-btn" data-mode="bilingual">双语对照</button>
+        </div>
+
+        <!-- 导航按钮组 -->
+        <div class="nav-actions">
+            <a href="/library" class="nav-btn library-btn" title="翻译库">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+            </a>
+        </div>
+
+        <!-- 主题选择器 -->
+        <div class="theme-selector">
+            <select id="theme-select" class="theme-select" title="切换主题">
+                <option value="light">明亮</option>
+                <option value="dark">暗色</option>
+                <option value="blue">海洋蓝</option>
+                <option value="green">自然绿</option>
+            </select>
+        </div>
+
+        <!-- 书签脚本链接 -->
+        <a href="/bookmarklet" class="bookmarklet-link" title="拖动到书签栏">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
+            </svg>
+        </a>
+    </nav>
+
+    <!-- 悬浮显示按钮（当导航栏隐藏时） -->
+    <button class="floating-toggle" id="floating-toggle" title="显示导航栏">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/>
+        </svg>
+    </button>
+
+    <!-- 主内容区域 -->
+    <main class="main-content" id="main-content">
+        <!-- 内容预览区域 -->
+        <div class="content-viewer">
+            <!-- 译文模式 -->
+            <iframe class="content-frame active" id="translated-frame"></iframe>
+
+            <!-- 原文模式 -->
+            <iframe class="content-frame" id="original-frame"></iframe>
+
+            <!-- 双语对照模式 -->
+            <div class="bilingual-container" id="bilingual-container">
+                <!-- 双语模式标签 -->
+                <div class="bilingual-labels">
+                    <div class="bilingual-label">译文</div>
+                    <div class="bilingual-label">原文</div>
+                </div>
+                
+                <!-- 双语对照iframe -->
+                <iframe class="bilingual-pane" id="bilingual-translated"></iframe>
+                <iframe class="bilingual-pane" id="bilingual-original"></iframe>
+                
+                <!-- 同步状态指示器 -->
+                <div class="sync-indicator" id="sync-indicator">
+                    <div class="sync-dot"></div>
+                    <span id="sync-status">同步滚动</span>
+                </div>
+            </div>
+
+            <!-- 空状态 -->
+            <div class="empty-state" id="empty-state">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <h2>欢迎使用 Monolith 网页翻译器</h2>
+                <p>在上方输入框中输入网页URL，点击翻译按钮开始使用</p>
+            </div>
+
+            <!-- 加载状态 -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在翻译网页，请稍候...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 错误提示 -->
+    <div class="error-toast" id="error-toast"></div>
+
+    <!-- 成功提示 -->
+    <div class="success-toast" id="success-toast"></div>
+
+    <!-- JavaScript文件 - 新的模块化结构 -->
+    <!-- 核心模块 -->
+    <script src="../assets/js/core/api.js"></script>
+    <script src="../assets/js/core/app.js"></script>
+    
+    <!-- 组件模块 -->  
+    <script src="../assets/js/components/theme.js"></script>
+    <script src="../assets/js/components/translator.js"></script>
+    <script src="../assets/js/components/ui.js"></script>
+    
+    <!-- 初始化脚本 -->
+    <script>
+        // 确保DOM加载完成后初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Monolith 网页翻译器启动');
+            
+            // 应用管理器已在 core/app.js 中自动初始化
+            // 其他组件将由应用管理器统一管理
+        });
+    </script>
+</body>
+</html>

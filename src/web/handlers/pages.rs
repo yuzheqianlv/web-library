@@ -20,7 +20,7 @@ pub async fn index() -> Html<String> {
         Ok(html) => Html(html),
         Err(_) => {
             // 如果构建失败，返回基础 HTML
-            let fallback_html = include_str!("../../../templates/index.html");
+            let fallback_html = include_str!("../../../templates/core/index.html");
             Html(fallback_html.to_string())
         }
     }
@@ -35,15 +35,15 @@ pub async fn library_page() -> Html<String> {
 /// 库调试页面处理器
 #[cfg(feature = "web")]
 pub async fn library_debug_page() -> Html<String> {
-    let debug_html = include_str!("../../../templates/library-debug.html");
-    Html(debug_html.to_string())
+    // library-debug.html 已被删除，返回library页面
+    Html(templates::library_page())
 }
 
 /// 书签脚本页面处理器
 #[cfg(feature = "web")]
 pub async fn bookmarklet_page() -> Html<String> {
     // 读取书签脚本页面模板
-    let template_content = include_str!("../../../templates/bookmarklet.html");
+    let template_content = include_str!("../../../templates/legacy/bookmarklet.html");
     Html(template_content.to_string())
 }
 

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>翻译库管理 - Monolith 网页翻译器</title>
+    <link rel="icon" type="image/png" href="/assets/icon/touxiang.png">
+    
+    <!-- 新的CSS文件结构 -->
+    <link rel="stylesheet" href="../assets/css/themes.css">
+    <link rel="stylesheet" href="../assets/css/base.css">
+    <link rel="stylesheet" href="../assets/css/components.css">
+    <link rel="stylesheet" href="../assets/css/responsive.css">
+    
+    <!-- 内联样式强制滚动 -->
+    <style>
+        html, body {
+            overflow: auto !important;
+            overflow-y: auto !important;
+            height: auto !important;
+            max-height: none !important;
+        }
+    </style>
+</head>
+<body style="overflow: auto !important; height: auto !important;">
+    <!-- 导航栏组件 -->
+    <div id="navbar-component"></div>
+
+    <!-- 主内容区域 -->
+    <div class="library-page">
+        <div class="library-container">
+            <!-- 页面头部组件 -->
+            <div id="header-component"></div>
+
+            <!-- 工具栏组件 -->
+            <div id="toolbar-component"></div>
+
+            <!-- 数据表格组件 -->
+            <div id="table-component"></div>
+
+            <!-- 分页组件 -->
+            <div id="pagination-component"></div>
+        </div>
+    </div>
+
+    <!-- 新的JavaScript文件结构 -->
+    <!-- 核心模块 -->
+    <script src="../assets/js/core/api.js"></script>
+    <script src="../assets/js/core/app.js"></script>
+    
+    <!-- 组件模块 -->
+    <script src="../assets/js/components/theme.js"></script>
+    <script src="../assets/js/components/library.js"></script>
+    <script src="../assets/js/components/ui.js"></script>
+
+    <!-- 组件加载脚本 -->
+    <script>
+        // 组件加载器
+        class ComponentLoader {
+            static async loadComponent(containerId, componentPath) {
+                try {
+                    const response = await fetch(componentPath);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    const html = await response.text();
+                    document.getElementById(containerId).innerHTML = html;
+                } catch (error) {
+                    console.error(`加载组件失败 ${componentPath}:`, error);
+                    // 降级处理：显示错误信息
+                    document.getElementById(containerId).innerHTML = 
+                        `<div style="color: #dc3545; padding: 1rem; text-align: center;">
+                            组件加载失败: ${componentPath}
+                        </div>`;
+                }
+            }
+
+            static async loadAllComponents() {
+                const components = [
+                    { id: 'navbar-component', path: '/templates/components/layout/navbar.html' },
+                    { id: 'header-component', path: '/templates/components/library/header.html' },
+                    { id: 'toolbar-component', path: '/templates/components/library/toolbar.html' },
+                    { id: 'table-component', path: '/templates/components/library/table.html' },
+                    { id: 'pagination-component', path: '/templates/components/library/pagination.html' }
+                ];
+
+                // 并行加载所有组件
+                await Promise.all(
+                    components.map(component => 
+                        this.loadComponent(component.id, component.path)
+                    )
+                );
+            }
+        }
+
+        // 页面加载完成后加载组件
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // 显示加载提示
+                document.body.style.opacity = '0.7';
+                
+                // 加载所有组件
+                await ComponentLoader.loadAllComponents();
+                
+                // 组件加载完成后，等待一小段时间确保DOM完全渲染
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // 恢复页面显示
+                document.body.style.opacity = '1';
+                
+                console.log('所有组件加载完成，开始初始化Library Manager');
+                
+                // 调试滚动问题
+                const bodyStyle = window.getComputedStyle(document.body);
+                console.log('Body computed styles:', {
+                    overflow: bodyStyle.overflow,
+                    overflowY: bodyStyle.overflowY,
+                    height: bodyStyle.height,
+                    maxHeight: bodyStyle.maxHeight
+                });
+                
+                console.log('Document dimensions:', {
+                    scrollHeight: document.documentElement.scrollHeight,
+                    clientHeight: document.documentElement.clientHeight,
+                    windowHeight: window.innerHeight
+                });
+                
+                // 初始化Library Manager
+                console.log('检查类可用性:', {
+                    ApiManager: typeof ApiManager,
+                    AppManager: typeof AppManager,
+                    LibraryManager: typeof LibraryManager,
+                    UIManager: typeof UIManager
+                });
+                
+                // 等待应用管理器初始化完成
+                if (window.appManager && window.appManager.initialized) {
+                    const libraryManager = window.appManager.getComponent('library') || new LibraryManager();
+                    if (!window.appManager.getComponent('library')) {
+                        window.appManager.registerComponent('library', libraryManager);
+                        await libraryManager.init();
+                    }
+                    window.libraryManager = libraryManager;
+                    console.log('LibraryManager初始化成功:', window.libraryManager);
+                    
+                    // 添加全局错误处理
+                    window.addEventListener('error', (e) => {
+                        console.error('全局错误:', e.error);
+                    });
+                    
+                    // 验证全局函数是否正确设置
+                    console.log('全局函数检查:', {
+                        viewRecord: typeof window.viewRecord,
+                        deleteRecord: typeof window.deleteRecord
+                    });
+                } else {
+                    console.error('LibraryManager类未定义，检查JavaScript文件加载顺序');
+                }
+                
+            } catch (error) {
+                console.error('组件加载过程中出现错误:', error);
+                document.body.style.opacity = '1';
+            }
+        });
+    </script>
+</body>
+</html>

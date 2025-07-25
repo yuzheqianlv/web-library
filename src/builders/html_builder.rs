@@ -111,32 +111,92 @@ impl HtmlBuilder {
 
     /// 读取并内联 CSS 样式
     fn read_css_inline(&self, template_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-        let css_path = template_path.join("assets/css/main.css");
-        let css_content = fs::read_to_string(css_path)?;
-        Ok(format!("<style>\n{}\n</style>", css_content))
+        // 按顺序读取新的 CSS 文件
+        let css_files = [
+            "assets/css/themes.css",
+            "assets/css/base.css",
+            "assets/css/components.css",
+            "assets/css/responsive.css",
+        ];
+        
+        let mut combined_css = String::new();
+        for css_file in &css_files {
+            let css_path = template_path.join(css_file);
+            if css_path.exists() {
+                let css_content = fs::read_to_string(css_path)?;
+                combined_css.push_str(&css_content);
+                combined_css.push('\n');
+            }
+        }
+        
+        Ok(format!("<style>\n{}\n</style>", combined_css))
     }
 
     /// 生成 CSS 外部链接
     fn get_css_links(&self) -> String {
-        format!(
-            r#"<link rel="stylesheet" href="{}assets/css/main.css">"#,
-            self.config.asset_base_path
-        )
+        let css_files = [
+            "assets/css/themes.css",
+            "assets/css/base.css",
+            "assets/css/components.css",
+            "assets/css/responsive.css",
+        ];
+        
+        css_files
+            .iter()
+            .map(|css_file| {
+                format!(
+                    r#"<link rel="stylesheet" href="{}{}">"#,
+                    self.config.asset_base_path, css_file
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// 读取并内联 JavaScript
     fn read_js_inline(&self, template_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-        let js_path = template_path.join("assets/js/monolith-translator.js");
-        let js_content = fs::read_to_string(js_path)?;
-        Ok(format!("<script>\n{}\n</script>", js_content))
+        // 按顺序读取新的 JS 文件
+        let js_files = [
+            "assets/js/core/api.js",
+            "assets/js/core/app.js",
+            "assets/js/components/theme.js",
+            "assets/js/components/translator.js",
+            "assets/js/components/ui.js",
+        ];
+        
+        let mut combined_js = String::new();
+        for js_file in &js_files {
+            let js_path = template_path.join(js_file);
+            if js_path.exists() {
+                let js_content = fs::read_to_string(js_path)?;
+                combined_js.push_str(&js_content);
+                combined_js.push('\n');
+            }
+        }
+        
+        Ok(format!("<script>\n{}\n</script>", combined_js))
     }
 
     /// 生成 JavaScript 外部引用
     fn get_js_scripts(&self) -> String {
-        format!(
-            r#"<script src="{}assets/js/monolith-translator.js"></script>"#,
-            self.config.asset_base_path
-        )
+        let js_files = [
+            "assets/js/core/api.js",
+            "assets/js/core/app.js",
+            "assets/js/components/theme.js",
+            "assets/js/components/translator.js",
+            "assets/js/components/ui.js",
+        ];
+        
+        js_files
+            .iter()
+            .map(|js_file| {
+                format!(
+                    r#"<script src="{}{}"></script>"#,
+                    self.config.asset_base_path, js_file
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// 获取页面主体内容
@@ -242,15 +302,23 @@ mod tests {
         let css_dir = template_dir.join("assets/css");
         let js_dir = template_dir.join("assets/js");
 
+        // 创建新的文件结构
         fs::create_dir_all(&css_dir).unwrap();
-        fs::create_dir_all(&js_dir).unwrap();
-
-        fs::write(css_dir.join("main.css"), "body { margin: 0; }").unwrap();
-        fs::write(
-            js_dir.join("monolith-translator.js"),
-            "console.log('test');",
-        )
-        .unwrap();
+        fs::create_dir_all(&js_dir.join("core")).unwrap();
+        fs::create_dir_all(&js_dir.join("components")).unwrap();
+        
+        // 创建CSS文件
+        fs::write(css_dir.join("themes.css"), ":root { --primary: #667eea; }").unwrap();
+        fs::write(css_dir.join("base.css"), "body { margin: 0; }").unwrap();
+        fs::write(css_dir.join("components.css"), ".btn { padding: 0.5rem; }").unwrap();
+        fs::write(css_dir.join("responsive.css"), "@media (max-width: 768px) {}").unwrap();
+        
+        // 创建JS文件
+        fs::write(js_dir.join("core/api.js"), "console.log('api');").unwrap();
+        fs::write(js_dir.join("core/app.js"), "console.log('app');").unwrap();
+        fs::write(js_dir.join("components/theme.js"), "console.log('theme');").unwrap();
+        fs::write(js_dir.join("components/translator.js"), "console.log('translator');").unwrap();
+        fs::write(js_dir.join("components/ui.js"), "console.log('ui');").unwrap();
 
         let config = HtmlBuilderConfig {
             template_dir: template_dir.to_string_lossy().to_string(),
@@ -263,8 +331,10 @@ mod tests {
 
         assert!(html.contains("<style>"));
         assert!(html.contains("body { margin: 0; }"));
+        assert!(html.contains(":root { --primary: #667eea; }"));
         assert!(html.contains("<script>"));
-        assert!(html.contains("console.log('test');"));
+        assert!(html.contains("console.log('api');"));
+        assert!(html.contains("console.log('app');"));
     }
 
     #[test]
@@ -278,9 +348,9 @@ mod tests {
         let builder = HtmlBuilder::new(config);
         let html = builder.build_index_page().unwrap();
 
-        assert!(html.contains(r#"<link rel="stylesheet" href="/static/assets/css/main.css">"#));
-        assert!(
-            html.contains(r#"<script src="/static/assets/js/monolith-translator.js"></script>"#)
-        );
+        assert!(html.contains(r#"<link rel="stylesheet" href="/static/assets/css/themes.css">"#));
+        assert!(html.contains(r#"<link rel="stylesheet" href="/static/assets/css/base.css">"#));
+        assert!(html.contains(r#"<script src="/static/assets/js/core/api.js"></script>"#));
+        assert!(html.contains(r#"<script src="/static/assets/js/core/app.js"></script>"#));
     }
 }
