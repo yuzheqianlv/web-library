@@ -211,7 +211,7 @@ pub async fn view_cached_html(
         }
         Ok(None) => {
             // 记录不存在，返回404页面
-            let error_html = format!(
+            let _error_html = format!(
                 r#"<!DOCTYPE html>
 <html lang="zh-CN">
 <head>

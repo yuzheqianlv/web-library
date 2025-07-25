@@ -1,6 +1,4 @@
-use cssparser::{
-    serialize_identifier, serialize_string, ParseError, Parser, ParserInput, SourcePosition, Token,
-};
+use cssparser::{serialize_identifier, serialize_string, ParseError, Parser, ParserInput, Token};
 
 use crate::network::session::Session;
 use crate::utils::url::{create_data_url, resolve_url, Url, EMPTY_IMAGE_DATA_URL};
@@ -90,9 +88,7 @@ pub fn process_css<'a>(
         };
 
         let token_result = match &token {
-            Token::Comment(_) => {
-                parser.slice_from(token_offset).to_string()
-            }
+            Token::Comment(_) => parser.slice_from(token_offset).to_string(),
             Token::Semicolon => ";".to_string(),
             Token::Colon => ":".to_string(),
             Token::Comma => ",".to_string(),
@@ -128,7 +124,9 @@ pub fn process_css<'a>(
             Token::QuotedString(value) => {
                 process_quoted_string_token(value, session, document_url, &mut context, func_name)?
             }
-            Token::Number { has_sign, value, .. } => {
+            Token::Number {
+                has_sign, value, ..
+            } => {
                 let mut result = String::new();
                 if *has_sign && *value >= 0.0 {
                     result.push('+');
@@ -136,7 +134,11 @@ pub fn process_css<'a>(
                 result.push_str(&value.to_string());
                 result
             }
-            Token::Percentage { has_sign, unit_value, .. } => {
+            Token::Percentage {
+                has_sign,
+                unit_value,
+                ..
+            } => {
                 let mut result = String::new();
                 if *has_sign && *unit_value >= 0.0 {
                     result.push('+');
@@ -145,7 +147,12 @@ pub fn process_css<'a>(
                 result.push('%');
                 result
             }
-            Token::Dimension { has_sign, value, unit, .. } => {
+            Token::Dimension {
+                has_sign,
+                value,
+                unit,
+                ..
+            } => {
                 let mut result = String::new();
                 if *has_sign && *value >= 0.0 {
                     result.push('+');
@@ -228,7 +235,6 @@ pub fn process_css<'a>(
 
     Ok(result)
 }
-
 
 /// 处理引用字符串token
 fn process_quoted_string_token(
@@ -374,8 +380,7 @@ fn process_import_unquoted_url(
             let mut data_url = create_data_url(
                 &media_type,
                 &charset,
-                embed_css(session, &final_url, &String::from_utf8_lossy(&css))
-                    .as_bytes(),
+                embed_css(session, &final_url, &String::from_utf8_lossy(&css)).as_bytes(),
                 &final_url,
             );
             data_url.set_fragment(full_url.fragment());
@@ -413,78 +418,4 @@ fn process_regular_unquoted_url(
         }
     }
     Ok(())
-}
-
-/// 处理块结构token
-fn process_block_token<'a>(
-    token: &Token,
-    session: &mut Session,
-    document_url: &Url,
-    context: &CssProcessingContext,
-    parser: &mut Parser,
-    rule_name: &str,
-    func_name: &str,
-) -> Result<String, ParseError<'static, String>> {
-    if session.options.no_fonts && context.current_rule == "font-face" {
-        return Ok(String::new());
-    }
-
-    let (open_char, close_char) = match token {
-        Token::ParenthesisBlock => ('(', ')'),
-        Token::SquareBracketBlock => ('[', ']'),
-        Token::CurlyBracketBlock => ('{', '}'),
-        _ => return Ok(String::new()),
-    };
-
-    let mut result = String::new();
-    result.push(open_char);
-
-    let block_css = parser
-        .parse_nested_block(|parser| {
-            process_css(
-                session,
-                document_url,
-                parser,
-                rule_name,
-                &context.current_prop,
-                func_name,
-            )
-        })
-        .unwrap();
-    result.push_str(&block_css);
-
-    result.push(close_char);
-    Ok(result)
-}
-
-/// 处理函数token
-fn process_function_token<'a>(
-    name: &str,
-    session: &mut Session,
-    document_url: &Url,
-    context: &CssProcessingContext,
-    parser: &mut Parser,
-    rule_name: &str,
-) -> Result<String, ParseError<'static, String>> {
-    let function_name = name.to_string();
-    let mut result = String::new();
-    result.push_str(&function_name);
-    result.push('(');
-
-    let block_css = parser
-        .parse_nested_block(|parser| {
-            process_css(
-                session,
-                document_url,
-                parser,
-                rule_name,
-                &context.current_prop,
-                &function_name,
-            )
-        })
-        .unwrap();
-    result.push_str(&block_css);
-
-    result.push(')');
-    Ok(result)
 }

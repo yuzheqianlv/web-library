@@ -38,12 +38,214 @@ impl TranslationProcessor {
         }
     }
 
-    /// 处理批次列表
+    /// 处理批次列表（并发优化版本）
     pub async fn process_batches(&mut self, batches: Vec<Batch>) -> TranslationResult<()> {
         self.stats.reset();
         self.stats.total_batches = batches.len();
 
-        tracing::info!("开始处理 {} 个翻译批次", batches.len());
+        if batches.is_empty() {
+            tracing::info!("没有批次需要处理");
+            return Ok(());
+        }
+
+        tracing::info!("开始并发处理 {} 个翻译批次", batches.len());
+
+        // 根据配置决定处理策略
+        if self.config.enable_concurrent_processing && batches.len() > 1 {
+            self.process_batches_concurrently(batches).await
+        } else {
+            self.process_batches_sequentially(batches).await
+        }
+    }
+
+    /// 并发处理批次（带超时和重试机制）
+    async fn process_batches_concurrently(&mut self, batches: Vec<Batch>) -> TranslationResult<()> {
+        use futures::future::join_all;
+        use std::sync::Arc;
+        use tokio::sync::Semaphore;
+        use tokio::time::timeout;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // 创建信号量控制并发数
+        let semaphore = Arc::new(Semaphore::new(self.config.max_concurrent_batches));
+        let successful_count = Arc::new(AtomicUsize::new(0));
+        let failed_count = Arc::new(AtomicUsize::new(0));
+        let retry_count = Arc::new(AtomicUsize::new(0));
+        
+        // 创建带超时和重试的异步任务
+        let tasks: Vec<_> = batches.into_iter().enumerate().map(|(batch_index, batch)| {
+            let semaphore = Arc::clone(&semaphore);
+            let service = Arc::clone(&self.service);
+            let config = self.config.clone();
+            let successful_count = Arc::clone(&successful_count);
+            let failed_count = Arc::clone(&failed_count);
+            let _retry_count = Arc::clone(&retry_count);
+            
+            async move {
+                // 获取信号量许可，控制并发数
+                let _permit = semaphore.acquire().await
+                    .map_err(|e| TranslationError::ConcurrencyError(format!("获取并发许可失败: {}", e)))?;
+                
+                tracing::debug!(
+                    "开始并发处理批次 {}: {} 项",
+                    batch_index + 1,
+                    batch.items.len()
+                );
+                
+                // 带重试的批次处理
+                let result = Self::process_batch_with_retry(
+                    batch,
+                    service,
+                    config.clone(),
+                    batch_index + 1,
+                ).await;
+                
+                // 更新原子计数器
+                match &result {
+                    Ok(stats) => {
+                        successful_count.fetch_add(1, Ordering::Relaxed);
+                        tracing::debug!("批次 {} 处理成功", batch_index + 1);
+                        Ok((batch_index, stats.clone()))
+                    }
+                    Err(e) => {
+                        failed_count.fetch_add(1, Ordering::Relaxed);
+                        tracing::error!("批次 {} 处理失败: {}", batch_index + 1, e);
+                        Err(e.clone())
+                    }
+                }
+            }
+        }).collect();
+        
+        let batches_count = tasks.len(); // 保存批次数量
+        
+        // 并发执行所有任务（带全局超时）
+        let results = timeout(
+            self.config.batch_timeout * (batches_count as u32 + 1),
+            join_all(tasks)
+        ).await.map_err(|_| {
+            TranslationError::TimeoutError(
+                format!("全局批次处理超时: {:.1}秒", 
+                        (self.config.batch_timeout * (batches_count as u32 + 1)).as_secs_f32())
+            )
+        })?;
+        
+        // 收集统计信息
+        let mut total_translated_items = 0;
+        let mut total_processing_time = Duration::from_millis(0);
+        
+        for result in results {
+            if let Ok((_, stats)) = result {
+                total_translated_items += stats.translated_items;
+                total_processing_time += stats.processing_time;
+            }
+        }
+        
+        // 更新主统计信息
+        let successful = successful_count.load(Ordering::Relaxed);
+        let failed = failed_count.load(Ordering::Relaxed);
+        let retries = retry_count.load(Ordering::Relaxed);
+        
+        self.stats.successful_batches = successful;
+        self.stats.failed_batches = failed;
+        self.stats.translated_items = total_translated_items;
+        self.stats.processing_time = total_processing_time;
+        
+        self.stats.success_rate = if self.stats.total_batches > 0 {
+            self.stats.successful_batches as f32 / self.stats.total_batches as f32
+        } else {
+            0.0
+        };
+        
+        tracing::info!(
+            "并发批次处理完成: 成功 {}, 失败 {}, 重试 {}, 成功率 {:.1}%",
+            successful,
+            failed,
+            retries,
+            self.stats.success_rate * 100.0
+        );
+        
+        if failed > 0 {
+            Err(TranslationError::ProcessingError(
+                format!("{}个批次处理失败", failed)
+            ))
+        } else {
+            Ok(())
+        }
+    }
+    
+    /// 带重试机制的批次处理
+    async fn process_batch_with_retry(
+        batch: Batch,
+        service: Arc<TranslationService>,
+        config: ProcessorConfig,
+        batch_number: usize,
+    ) -> TranslationResult<ProcessorStats> {
+        use tokio::time::{timeout, sleep};
+        
+        let mut last_error = None;
+        
+        for attempt in 0..=config.max_retries {
+            // 创建临时处理器
+            let mut temp_processor = TranslationProcessor {
+                service: Arc::clone(&service),
+                stats: ProcessorStats::default(),
+                config: config.clone(),
+            };
+            
+            // 带超时的批次处理
+            let process_future = temp_processor.process_single_batch(batch.clone());
+            let result = timeout(config.batch_timeout, process_future).await;
+            
+            match result {
+                Ok(Ok(())) => {
+                    if attempt > 0 {
+                        tracing::info!("批次 {} 在第 {} 次重试后成功", batch_number, attempt);
+                    }
+                    return Ok(temp_processor.stats);
+                }
+                Ok(Err(e)) => {
+                    last_error = Some(e.clone());
+                    if !config.enable_retry || !e.is_retryable() {
+                        tracing::error!("批次 {} 出现不可重试错误: {}", batch_number, e);
+                        return Err(e);
+                    }
+                }
+                Err(_) => {
+                    let timeout_error = TranslationError::TimeoutError(
+                        format!("批次 {} 处理超时: {:.1}秒", batch_number, config.batch_timeout.as_secs_f32())
+                    );
+                    last_error = Some(timeout_error.clone());
+                    if !config.enable_retry {
+                        return Err(timeout_error);
+                    }
+                }
+            }
+            
+            // 如果不是最后一次尝试，等待后重试
+            if attempt < config.max_retries {
+                let delay = config.retry_delay * (2_u32.pow(attempt as u32)); // 指数退避
+                tracing::warn!(
+                    "批次 {} 处理失败，{:.1}秒后进行第 {} 次重试: {}", 
+                    batch_number, 
+                    delay.as_secs_f32(),
+                    attempt + 1,
+                    last_error.as_ref().unwrap()
+                );
+                sleep(delay).await;
+            }
+        }
+        
+        // 所有重试都失败
+        Err(last_error.unwrap_or_else(|| {
+            TranslationError::ProcessingError(
+                format!("批次 {} 经 {} 次重试后仍然失败", batch_number, config.max_retries)
+            )
+        }))
+    }
+
+    /// 顺序处理批次（原有逻辑保持向后兼容）
+    async fn process_batches_sequentially(&mut self, batches: Vec<Batch>) -> TranslationResult<()> {
+        tracing::info!("开始顺序处理 {} 个翻译批次", batches.len());
 
         for (i, batch) in batches.into_iter().enumerate() {
             tracing::debug!(
@@ -76,7 +278,7 @@ impl TranslationProcessor {
         };
 
         tracing::info!(
-            "批次处理完成: 成功 {}/{}, 成功率 {:.1}%",
+            "顺序批次处理完成: 成功 {}/{}, 成功率 {:.1}%",
             self.stats.successful_batches,
             self.stats.total_batches,
             self.stats.success_rate * 100.0
@@ -85,7 +287,7 @@ impl TranslationProcessor {
         Ok(())
     }
 
-    /// 处理单个批次
+    /// 处理单个批次（支持Clone以便重试）
     async fn process_single_batch(&mut self, batch: Batch) -> TranslationResult<()> {
         let start_time = Instant::now();
 
@@ -308,6 +510,12 @@ pub struct ProcessorConfig {
     pub max_retries: usize,
     /// 重试延迟
     pub retry_delay: Duration,
+    /// 启用并发处理
+    pub enable_concurrent_processing: bool,
+    /// 最大并发批次数
+    pub max_concurrent_batches: usize,
+    /// 批次超时时间
+    pub batch_timeout: Duration,
 }
 
 impl Default for ProcessorConfig {
@@ -319,6 +527,9 @@ impl Default for ProcessorConfig {
             enable_retry: true,
             max_retries: 3,
             retry_delay: Duration::from_millis(1000),
+            enable_concurrent_processing: true,
+            max_concurrent_batches: 5,
+            batch_timeout: Duration::from_secs(30),
         }
     }
 }

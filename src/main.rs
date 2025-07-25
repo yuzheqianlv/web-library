@@ -158,7 +158,11 @@ impl Output {
         if destination.is_empty() || destination.eq("-") {
             Ok(Output::Stdout(io::stdout()))
         } else {
-            let final_destination = format_output_path(destination, Some(document_title), format == MonolithOutputFormat::MHTML);
+            let final_destination = format_output_path(
+                destination,
+                Some(document_title),
+                format == MonolithOutputFormat::MHTML,
+            );
             Ok(Output::File(fs::File::create(final_destination)?))
         }
     }

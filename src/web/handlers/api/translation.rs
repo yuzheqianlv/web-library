@@ -63,7 +63,7 @@ pub async fn translate_url(
         let options = options_original;
         task::spawn_blocking(move || {
             let session = Session::new(None, None, options);
-            create_monolithic_document(session, url)
+            create_monolithic_document(session, &url)
         })
     };
 
@@ -75,7 +75,7 @@ pub async fn translate_url(
             move || -> Result<(Vec<u8>, Option<String>), MonolithError> {
                 // 先获取原始内容
                 let session = Session::new(None, None, options.clone());
-                let original_result = create_monolithic_document(session, url.clone())?;
+                let original_result = create_monolithic_document(session, &url)?;
 
                 // 如果启用了翻译功能，进行翻译
                 #[cfg(feature = "translation")]
@@ -94,7 +94,7 @@ pub async fn translate_url(
                         .block_on(translate_dom_content(
                             dom,
                             &target_lang,
-                            Some(&translation_config.deeplx_api_url),
+                            Some(&translation_config.api_url),
                         ))
                         .map_err(|e| MonolithError::new(&format!("Translation error: {}", e)))?;
 

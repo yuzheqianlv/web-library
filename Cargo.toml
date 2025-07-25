@@ -48,6 +48,7 @@ translation = [
     "shellexpand",
     "lru",
     "dashmap",
+    "futures",
     "rayon",
     "tower",
     "metrics",

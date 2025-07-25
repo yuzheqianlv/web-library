@@ -1,10 +1,10 @@
+use chrono::{SecondsFormat, Utc};
+use encoding_rs::Encoding;
+use markup5ever_rcdom::RcDom;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::path::Path;
-use chrono::{SecondsFormat, Utc};
-use encoding_rs::Encoding;
-use markup5ever_rcdom::RcDom;
 use url::Url;
 
 use crate::network::session::Session;
@@ -244,16 +244,12 @@ pub fn create_monolithic_document(
                         (data, Some(parsed_url))
                     } else {
                         return Err(MonolithError::new(&format!(
-                            "Unsupported media type: {}",
-                            media_type
+                            "Unsupported media type: {media_type}"
                         )));
                     }
                 }
                 Err(e) => {
-                    return Err(MonolithError::new(&format!(
-                        "Failed to fetch URL: {}",
-                        e
-                    )));
+                    return Err(MonolithError::new(&format!("Failed to fetch URL: {e}")));
                 }
             }
         } else {
@@ -263,10 +259,7 @@ pub fn create_monolithic_document(
         // 本地文件路径
         let path = Path::new(target);
         if !path.exists() {
-            return Err(MonolithError::new(&format!(
-                "File not found: {}",
-                target
-            )));
+            return Err(MonolithError::new(&format!("File not found: {target}")));
         }
 
         match fs::read(path) {
@@ -280,10 +273,7 @@ pub fn create_monolithic_document(
                 (data, file_url)
             }
             Err(e) => {
-                return Err(MonolithError::new(&format!(
-                    "Failed to read file: {}",
-                    e
-                )));
+                return Err(MonolithError::new(&format!("Failed to read file: {e}")));
             }
         }
     };
@@ -363,7 +353,7 @@ pub fn parse_content_type(content_type: &str) -> (String, String, bool) {
     let mut is_base64 = false;
 
     let parts: Vec<&str> = content_type.split(';').collect();
-    
+
     if !parts.is_empty() {
         media_type = parts[0].trim().to_lowercase();
     }
@@ -386,14 +376,10 @@ pub fn is_plaintext_media_type(media_type: &str) -> bool {
 }
 
 /// Formats output path with title substitution and sanitization
-pub fn format_output_path(
-    path: &str,
-    document_title: Option<&str>,
-    is_mhtml: bool,
-) -> String {
+pub fn format_output_path(path: &str, document_title: Option<&str>, is_mhtml: bool) -> String {
     let datetime: &str = &Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let title = document_title.unwrap_or("");
-    
+
     path.replace("%timestamp%", &datetime.replace(':', "_"))
         .replace(
             "%title%",
@@ -406,42 +392,20 @@ pub fn format_output_path(
                 .replace('\"', "")
                 .replace('|', "-")
                 .replace('?', "")
-                .trim_start_matches('.')
+                .trim_start_matches('.'),
         )
-        .replace(
-            "%extension%",
-            if is_mhtml { "mhtml" } else { "html" },
-        )
-        .replace(
-            "%ext%",
-            if is_mhtml { "mht" } else { "htm" },
-        )
-}
-
-/// Sanitizes filename by removing invalid characters
-fn sanitize_filename(filename: &str) -> String {
-    filename
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || " .-_".contains(c) {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        .trim()
-        .to_string()
+        .replace("%extension%", if is_mhtml { "mhtml" } else { "html" })
+        .replace("%ext%", if is_mhtml { "mht" } else { "htm" })
 }
 
 /// Prints an error message to stderr
 pub fn print_error_message(msg: &str) {
-    eprintln!("{}{}{}", ANSI_COLOR_RED, msg, ANSI_COLOR_RESET);
+    eprintln!("{ANSI_COLOR_RED}{msg}{ANSI_COLOR_RESET}");
 }
 
 /// Prints an info message to stdout
 pub fn print_info_message(msg: &str) {
-    println!("{}", msg);
+    println!("{msg}");
 }
 
 #[cfg(test)]
@@ -463,7 +427,10 @@ mod tests {
     #[test]
     fn test_detect_media_type_by_file_name_common_types() {
         assert_eq!(detect_media_type_by_file_name("style.css"), "text/css");
-        assert_eq!(detect_media_type_by_file_name("script.js"), "application/javascript");
+        assert_eq!(
+            detect_media_type_by_file_name("script.js"),
+            "application/javascript"
+        );
         assert_eq!(detect_media_type_by_file_name("image.png"), "image/png");
         assert_eq!(detect_media_type_by_file_name("photo.jpg"), "image/jpeg");
     }
@@ -471,17 +438,26 @@ mod tests {
     #[test]
     fn test_detect_media_type_by_file_name_case_insensitive() {
         assert_eq!(detect_media_type_by_file_name("STYLE.CSS"), "text/css");
-        assert_eq!(detect_media_type_by_file_name("Script.JS"), "application/javascript");
+        assert_eq!(
+            detect_media_type_by_file_name("Script.JS"),
+            "application/javascript"
+        );
     }
 
     #[test]
     fn test_detect_media_type_by_file_name_unknown_extension() {
-        assert_eq!(detect_media_type_by_file_name("file.unknown"), "application/octet-stream");
+        assert_eq!(
+            detect_media_type_by_file_name("file.unknown"),
+            "application/octet-stream"
+        );
     }
 
     #[test]
     fn test_detect_media_type_by_file_name_multiple_dots() {
-        assert_eq!(detect_media_type_by_file_name("file.min.js"), "application/javascript");
+        assert_eq!(
+            detect_media_type_by_file_name("file.min.js"),
+            "application/javascript"
+        );
     }
 
     #[test]
@@ -509,7 +485,8 @@ mod tests {
 
     #[test]
     fn test_parse_content_type_complex() {
-        let (media_type, charset, is_base64) = parse_content_type("text/html; charset=\"utf-8\"; boundary=something");
+        let (media_type, charset, is_base64) =
+            parse_content_type("text/html; charset=\"utf-8\"; boundary=something");
         assert_eq!(media_type, "text/html");
         assert_eq!(charset, "utf-8");
         assert!(!is_base64);
@@ -525,7 +502,8 @@ mod tests {
 
     #[test]
     fn test_parse_content_type_with_base64() {
-        let (media_type, charset, is_base64) = parse_content_type("text/plain; charset=utf-8; base64");
+        let (media_type, charset, is_base64) =
+            parse_content_type("text/plain; charset=utf-8; base64");
         assert_eq!(media_type, "text/plain");
         assert_eq!(charset, "utf-8");
         assert!(is_base64);
@@ -590,9 +568,10 @@ impl DocumentProcessor {
         // 2. 确定基础URL和编码
         let url_resolver = UrlResolver::new();
         let mut base_url = url_resolver.determine_base_url(&input_target)?;
-        
+
         let encoding_processor = EncodingProcessor::new();
-        let (dom, document_encoding) = encoding_processor.process_encoding(&input_data, input_encoding)?;
+        let (dom, document_encoding) =
+            encoding_processor.process_encoding(&input_data, input_encoding)?;
 
         // 3. 解析自定义基础URL
         base_url = url_resolver.resolve_custom_base_url(base_url, &dom, &self.session.options)?;
@@ -604,7 +583,7 @@ impl DocumentProcessor {
         // 5. 翻译处理（如果启用）
         #[cfg(feature = "translation")]
         let dom = self.process_translation(dom)?;
-        
+
         #[cfg(not(feature = "translation"))]
         let dom = dom;
 
@@ -635,9 +614,14 @@ impl DocumentProcessor {
 
             let translated_dom = translate_dom_content_sync(
                 dom,
-                self.session.options.target_language.as_deref().unwrap_or("zh"),
+                self.session
+                    .options
+                    .target_language
+                    .as_deref()
+                    .unwrap_or("zh"),
                 self.session.options.translation_api_url.as_deref(),
-            ).map_err(|e| MonolithError::new(&format!("Translation error: {}", e)))?;
+            )
+            .map_err(|e| MonolithError::new(&format!("Translation error: {e}")))?;
 
             if !self.session.options.silent {
                 println!("Translation completed");
@@ -676,7 +660,11 @@ impl DocumentProcessor {
         }
     }
 
-    fn process_custom_encoding(&self, dom: RcDom, document_encoding: String) -> Result<(RcDom, String), MonolithError> {
+    fn process_custom_encoding(
+        &self,
+        dom: RcDom,
+        document_encoding: String,
+    ) -> Result<(RcDom, String), MonolithError> {
         if let Some(custom_encoding) = self.session.options.encoding.clone() {
             let new_dom = set_charset(dom, custom_encoding.clone());
             Ok((new_dom, custom_encoding))
@@ -717,7 +705,8 @@ impl UrlResolver {
 
     pub fn determine_base_url(&self, input_target: &Option<String>) -> Result<Url, MonolithError> {
         if let Some(target) = input_target {
-            Url::parse(target).map_err(|e| MonolithError::new(&format!("Failed to parse target URL: {}", e)))
+            Url::parse(target)
+                .map_err(|e| MonolithError::new(&format!("Failed to parse target URL: {}", e)))
         } else {
             Ok(Url::parse("data:text/html,").unwrap())
         }
@@ -730,7 +719,7 @@ impl UrlResolver {
         options: &MonolithOptions,
     ) -> Result<Url, MonolithError> {
         let custom_base_url = options.base_url.clone().unwrap_or_default();
-        
+
         if custom_base_url.is_empty() {
             // 没有自定义基础URL；尝试从DOM获取BASE元素
             if let Some(existing_base_url) = get_base_url(&dom.document) {
@@ -744,7 +733,11 @@ impl UrlResolver {
         Ok(base_url)
     }
 
-    fn parse_custom_base_url(&self, base_url: Url, custom_base_url: &str) -> Result<Url, MonolithError> {
+    fn parse_custom_base_url(
+        &self,
+        base_url: Url,
+        custom_base_url: &str,
+    ) -> Result<Url, MonolithError> {
         match Url::parse(custom_base_url) {
             Ok(parsed_url) => {
                 if parsed_url.scheme() == "file" {
@@ -802,7 +795,7 @@ impl EncodingProcessor {
         input_encoding: Option<String>,
     ) -> Result<(RcDom, String), MonolithError> {
         let mut document_encoding = input_encoding.unwrap_or_else(|| "utf-8".to_string());
-        
+
         // 初始解析
         let mut dom = html_to_dom(input_data, document_encoding.clone());
 
@@ -810,7 +803,9 @@ impl EncodingProcessor {
         if let Some(html_charset) = get_charset(&dom.document) {
             if !html_charset.is_empty() {
                 // 检查HTML内部指定的字符集是否有效
-                if let Some(document_charset) = Encoding::for_label_no_replacement(html_charset.as_bytes()) {
+                if let Some(document_charset) =
+                    Encoding::for_label_no_replacement(html_charset.as_bytes())
+                {
                     document_encoding = html_charset;
                     dom = html_to_dom(input_data, document_charset.name().to_string());
                 }
@@ -911,39 +906,55 @@ pub struct OutputFormatter<'a> {
 
 impl<'a> OutputFormatter<'a> {
     pub fn new(options: &'a MonolithOptions, input_target: &'a Option<String>) -> Self {
-        Self { options, input_target }
+        Self {
+            options,
+            input_target,
+        }
     }
 
-    pub fn format_output(&self, dom: RcDom, document_encoding: String) -> Result<Vec<u8>, MonolithError> {
+    pub fn format_output(
+        &self,
+        dom: RcDom,
+        document_encoding: String,
+    ) -> Result<Vec<u8>, MonolithError> {
         match self.options.output_format {
             MonolithOutputFormat::HTML => self.format_html_output(dom, document_encoding),
             MonolithOutputFormat::MHTML => self.format_mhtml_output(dom, document_encoding),
         }
     }
 
-    fn format_html_output(&self, dom: RcDom, document_encoding: String) -> Result<Vec<u8>, MonolithError> {
+    fn format_html_output(
+        &self,
+        dom: RcDom,
+        document_encoding: String,
+    ) -> Result<Vec<u8>, MonolithError> {
         let mut result = serialize_document(dom, document_encoding, self.options);
-        
+
         self.prepend_metadata_if_needed(&mut result)?;
         self.ensure_trailing_newline(&mut result);
-        
+
         Ok(result)
     }
 
-    fn format_mhtml_output(&self, dom: RcDom, document_encoding: String) -> Result<Vec<u8>, MonolithError> {
+    fn format_mhtml_output(
+        &self,
+        dom: RcDom,
+        document_encoding: String,
+    ) -> Result<Vec<u8>, MonolithError> {
         let mut result = serialize_document(dom, document_encoding, self.options);
-        
+
         self.prepend_metadata_if_needed(&mut result)?;
         self.add_mime_headers(&mut result);
-        
+
         Ok(result)
     }
 
     fn prepend_metadata_if_needed(&self, result: &mut Vec<u8>) -> Result<(), MonolithError> {
         if !self.options.no_metadata {
             if let Some(target) = self.input_target.as_ref().filter(|t| !t.is_empty()) {
-                let url = Url::parse(target)
-                    .map_err(|e| MonolithError::new(&format!("Failed to parse target URL: {}", e)))?;
+                let url = Url::parse(target).map_err(|e| {
+                    MonolithError::new(&format!("Failed to parse target URL: {}", e))
+                })?;
                 let mut metadata_comment = create_metadata_tag(&url);
                 metadata_comment.push('\n');
                 result.splice(0..0, metadata_comment.as_bytes().to_vec());

@@ -65,6 +65,10 @@ pub enum TranslationError {
     #[error("资源不足: {0}")]
     ResourceExhausted(String),
 
+    /// 处理错误
+    #[error("处理错误: {0}")]
+    ProcessingError(String),
+
     /// 内部错误
     #[error("内部错误: {0}")]
     InternalError(String),
@@ -88,6 +92,7 @@ impl TranslationError {
             TranslationError::BatchProcessingError(_) => true,
             TranslationError::TextCollectionError(_) => false,
             TranslationError::ConcurrencyError(_) => true,
+            TranslationError::ProcessingError(_) => true,
             TranslationError::InternalError(_) => false,
         }
     }
@@ -108,6 +113,7 @@ impl TranslationError {
             TranslationError::SerializationError(_) => ErrorSeverity::Error,
             TranslationError::ConcurrencyError(_) => ErrorSeverity::Warning,
             TranslationError::ResourceExhausted(_) => ErrorSeverity::Warning,
+            TranslationError::ProcessingError(_) => ErrorSeverity::Error,
             TranslationError::InternalError(_) => ErrorSeverity::Critical,
         }
     }
@@ -128,6 +134,7 @@ impl TranslationError {
             TranslationError::SerializationError(_) => ErrorCategory::Serialization,
             TranslationError::ConcurrencyError(_) => ErrorCategory::Concurrency,
             TranslationError::ResourceExhausted(_) => ErrorCategory::Resource,
+            TranslationError::ProcessingError(_) => ErrorCategory::Processing,
             TranslationError::InternalError(_) => ErrorCategory::Internal,
         }
     }
@@ -150,6 +157,7 @@ impl TranslationError {
             TranslationError::SerializationError(ref mut msg) => *msg = new_msg,
             TranslationError::ConcurrencyError(ref mut msg) => *msg = new_msg,
             TranslationError::ResourceExhausted(ref mut msg) => *msg = new_msg,
+            TranslationError::ProcessingError(ref mut msg) => *msg = new_msg,
             TranslationError::InternalError(ref mut msg) => *msg = new_msg,
             TranslationError::RateLimitExceeded => {
                 return TranslationError::RateLimitExceeded;

@@ -27,7 +27,7 @@ pub async fn get_content(
 
     let (data, title) = task::spawn_blocking(move || {
         let session = Session::new(None, None, options);
-        create_monolithic_document(session, url)
+        create_monolithic_document(session, &url)
     })
     .await
     .map_err(|e| {

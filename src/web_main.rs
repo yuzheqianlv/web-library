@@ -25,12 +25,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 解析命令行参数
     let args: Vec<String> = std::env::args().collect();
 
-    let mut bind_addr =
-        std::env::var("WEB_BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let mut port = std::env::var("WEB_PORT")
-        .unwrap_or_else(|_| "7080".to_string())
-        .parse::<u16>()
-        .unwrap_or(7080);
+    // 使用类型安全的环境变量系统加载默认配置
+    use monolith::env::{web, EnvVar};
+    let mut bind_addr = web::BindAddress::get_or_default("127.0.0.1".to_string());
+    let mut port = web::Port::get_or_default(7080);
 
     // 简单的命令行参数解析
     let mut i = 1;
@@ -74,16 +72,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     monolith_options.silent = true; // Web 模式下静默运行
     monolith_options.output_format = monolith::core::MonolithOutputFormat::HTML;
 
-    // 创建 Web 配置
-    let web_config = WebConfig {
-        bind_addr,
-        port,
-        static_dir: Some("static".to_string()),
-        #[cfg(feature = "web")]
-        mongo_config: Some(monolith::web::config::MongoConfig::default()),
-        #[cfg(not(feature = "web"))]
-        mongo_config: None,
-    };
+    // 创建 Web 配置，优先使用命令行参数覆盖环境变量
+    let mut web_config = WebConfig::from_env().unwrap_or_else(|e| {
+        tracing::warn!("Failed to load web config from environment: {}. Using defaults.", e);
+        WebConfig {
+            bind_addr: "127.0.0.1".to_string(),
+            port: 7080,
+            static_dir: Some("static".to_string()),
+            #[cfg(feature = "web")]
+            mongo_config: Some(monolith::web::config::MongoConfig::default()),
+            #[cfg(not(feature = "web"))]
+            mongo_config: None,
+        }
+    });
+    
+    // 命令行参数覆盖环境变量配置
+    web_config.bind_addr = bind_addr;
+    web_config.port = port;
+    
+    // 验证最终配置
+    if let Err(e) = web_config.validate() {
+        tracing::error!("Web configuration validation failed: {}", e);
+        std::process::exit(1);
+    }
 
     // 启动 Web 服务器
     let server = WebServer::new(web_config, monolith_options);

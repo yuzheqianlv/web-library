@@ -14,7 +14,7 @@ use crate::translation::{
     batch::{BatchManager, BatchManagerConfig},
     cache::{CacheConfig, CacheManager},
     collector::{CollectorConfig, TextCollector},
-    config::{ConfigManager, EnhancedTranslationConfig},
+    config::{ConfigManager, TranslationConfig},
     error::{TranslationError, TranslationResult},
     filters::TextFilter,
     processor::{ProcessorConfig, TranslationProcessor},
@@ -39,8 +39,15 @@ pub struct EnhancedTranslationService {
 impl EnhancedTranslationService {
     /// 创建新的翻译服务
     #[cfg(feature = "translation")]
-    pub fn new(config: EnhancedTranslationConfig) -> TranslationResult<Self> {
-        let base_service = Arc::new(BaseTranslationService::new(config.base.clone()));
+    pub fn new(config: TranslationConfig) -> TranslationResult<Self> {
+        // 创建基础服务需要的配置结构
+        let base_config = markdown_translator::TranslationConfig {
+            enabled: true,
+            source_lang: config.source_lang.clone(),
+            deeplx_api_url: config.api_url.clone(),
+            ..Default::default()
+        };
+        let base_service = Arc::new(BaseTranslationService::new(base_config));
 
         let config_manager = ConfigManager::new()?;
 
@@ -51,10 +58,10 @@ impl EnhancedTranslationService {
         let batch_manager = BatchManager::new(batch_config);
 
         let cache_config = CacheConfig {
-            enable_local_cache: config.cache.enabled,
-            local_cache_size: config.cache.local_cache_size,
-            default_ttl: config.cache.ttl,
-            enable_warmup: config.cache.enable_warmup,
+            enable_local_cache: config.cache_enabled,
+            local_cache_size: config.local_cache_size,
+            default_ttl: config.cache_ttl(),
+            enable_warmup: false,  // 新配置结构中没有这个字段
             ..Default::default()
         };
         let cache_manager = CacheManager::new(cache_config);
@@ -77,11 +84,7 @@ impl EnhancedTranslationService {
     pub fn create_default(target_lang: &str, api_url: Option<&str>) -> TranslationResult<Self> {
         #[cfg(feature = "translation")]
         {
-            let config = ConfigManager::new()?.create_legacy_config(target_lang, api_url)?;
-            let enhanced_config = crate::translation::config::EnhancedTranslationConfig {
-                base: config,
-                ..crate::translation::config::ConfigManager::default_config()
-            };
+            let enhanced_config = crate::translation::config::TranslationConfig::default_with_lang(target_lang, api_url);
             Self::new(enhanced_config)
         }
 
@@ -251,15 +254,17 @@ impl EnhancedTranslationService {
 
     /// 获取目标语言
     async fn get_target_language(&self) -> TranslationResult<String> {
-        let config = self.config_manager.get_config()?;
-        Ok(config.base.target_lang)
+        let config = self.config_manager.get_config();
+        Ok(config.target_lang.clone())
     }
 
     // Redis缓存功能已被移除
 
     /// 重新加载配置
     pub async fn reload_config(&mut self) -> TranslationResult<bool> {
-        self.config_manager.reload_if_changed()
+        // 简化版本：总是返回false表示没有变化
+        // TODO: 实现配置文件变化检测
+        Ok(false)
     }
 
     /// 清理过期缓存
@@ -303,19 +308,10 @@ impl EnhancedTranslationService {
         };
 
         // 检查配置
-        match self.config_manager.get_config() {
-            Ok(_) => {
-                status
-                    .components
-                    .insert("config".to_string(), HealthLevel::Healthy);
-            }
-            Err(_) => {
-                status
-                    .components
-                    .insert("config".to_string(), HealthLevel::Unhealthy);
-                status.overall = HealthLevel::Degraded;
-            }
-        }
+        let _config = self.config_manager.get_config();
+        status
+            .components
+            .insert("config".to_string(), HealthLevel::Healthy);
 
         // 检查缓存
         let cache_info = self.cache_manager.get_cache_info().await;
@@ -399,7 +395,36 @@ pub enum HealthLevel {
     Unhealthy,
 }
 
-/// 向后兼容的翻译函数
+/// 翻译HTML DOM内容（异步版本）
+///
+/// 这是主要的翻译API，用于将HTML DOM中的文本内容翻译成目标语言。
+///
+/// # 参数
+///
+/// * `dom` - 要翻译的HTML DOM结构
+/// * `target_lang` - 目标语言代码（如 "zh", "en", "ja"）
+/// * `api_url` - 可选的翻译API URL，如果为None则使用配置文件中的设置
+///
+/// # 返回值
+///
+/// 返回翻译后的DOM结构，如果翻译失败则返回错误
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use markup5ever_rcdom::RcDom;
+/// use monolith::translation::translate_dom_content;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let dom: RcDom = /* 从HTML解析得到的DOM */;
+/// let translated_dom = translate_dom_content(
+///     dom,
+///     "zh",
+///     Some("http://localhost:1188/translate")
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn translate_dom_content(
     dom: RcDom,
     target_lang: &str,
@@ -409,7 +434,37 @@ pub async fn translate_dom_content(
     service.translate_dom(dom).await
 }
 
-/// 同步翻译接口（向后兼容）
+/// 翻译HTML DOM内容（同步版本）
+///
+/// 这是同步版本的翻译API，内部会创建异步运行时来执行翻译。
+/// 对于已有异步上下文的代码，建议使用 `translate_dom_content` 异步版本。
+///
+/// # 参数
+///
+/// * `dom` - 要翻译的HTML DOM结构
+/// * `target_lang` - 目标语言代码（如 "zh", "en", "ja"）
+/// * `api_url` - 可选的翻译API URL，如果为None则使用配置文件中的设置
+///
+/// # 返回值
+///
+/// 返回翻译后的DOM结构，如果翻译失败则返回 `MonolithError`
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use markup5ever_rcdom::RcDom;
+/// use monolith::translation::translate_dom_content_sync;
+///
+/// # fn example() -> Result<(), monolith::core::MonolithError> {
+/// let dom: RcDom = /* 从HTML解析得到的DOM */;
+/// let translated_dom = translate_dom_content_sync(
+///     dom,
+///     "zh",
+///     Some("http://localhost:1188/translate")
+/// )?;
+/// # Ok(())
+/// # }
+/// ```
 pub fn translate_dom_content_sync(
     dom: RcDom,
     target_lang: &str,

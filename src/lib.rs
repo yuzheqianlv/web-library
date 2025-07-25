@@ -15,6 +15,7 @@
 #[cfg(feature = "web")]
 pub mod builders;
 pub mod core;
+pub mod env;
 pub mod network;
 pub mod parsers;
 #[cfg(feature = "translation")]

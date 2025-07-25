@@ -202,7 +202,7 @@ impl ConfigManager {
     pub fn get_config(&self) -> Result<EnhancedTranslationConfig, TranslationError> {
         self.config
             .read()
-            .map_err(|e| TranslationError::ConfigError(format!("读取配置失败: {}", e)))
+            .map_err(|e| TranslationError::ConfigError(format!("读取配置失败: {e}")))
             .map(|config| config.clone())
     }
 

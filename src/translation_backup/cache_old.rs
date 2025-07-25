@@ -174,7 +174,6 @@ impl CacheManager {
         }
     }
 
-
     /// 获取翻译缓存
     pub async fn get_translation(
         &mut self,
