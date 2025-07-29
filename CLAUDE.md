@@ -144,3 +144,7 @@ The codebase uses custom error types:
 - Extensive documentation comments for public APIs
 - Conditional compilation with `#[cfg(feature = "...")]`
 - Follows standard Rust naming conventions
+
+## Code Comments
+
+- 使用中文编写注释

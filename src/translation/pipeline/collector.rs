@@ -1,6 +1,45 @@
-//! 文本收集器模块
+//! DOM文本收集器模块
 //!
-//! 提供DOM文本和属性的智能收集功能
+//! 本模块提供了一套完整的DOM文本收集系统，用于从HTML文档中智能提取需要翻译的文本内容。
+//! 主要功能包括：
+//!
+//! ## 核心功能
+//! - **智能文本识别**: 自动识别并提取DOM树中的可翻译文本内容
+//! - **属性文本收集**: 支持提取HTML元素属性中的文本（如title、alt、placeholder等）
+//! - **优先级管理**: 基于文本类型和内容特征自动分配翻译优先级
+//! - **复杂度评估**: 通过多维度算法评估文本翻译复杂度，优化翻译顺序
+//! - **去重优化**: 智能去重相同或相似的文本内容，避免重复翻译
+//! - **批量处理**: 支持串行和并行两种收集模式，适应不同性能需求
+//!
+//! ## 工作原理
+//! 1. **DOM遍历**: 深度优先遍历HTML DOM树，访问每个节点
+//! 2. **文本提取**: 从文本节点和元素属性中提取文本内容
+//! 3. **过滤筛选**: 使用TextFilter过滤掉无需翻译的内容（如空白、纯数字等）
+//! 4. **类型识别**: 基于节点上下文自动识别文本类型（标题、链接、按钮等）
+//! 5. **优先级计算**: 根据文本类型、长度、位置等因素计算翻译优先级
+//! 6. **复杂度分析**: 分析文本的语言复杂度，为翻译API调度提供参考
+//! 7. **去重排序**: 移除重复内容并按优先级排序，生成最终的翻译队列
+//!
+//! ## 使用示例
+//! ```rust
+//! use monolith::translation::pipeline::collector::{TextCollector, CollectorConfig};
+//!
+//! // 创建收集器
+//! let config = CollectorConfig::default();
+//! let mut collector = TextCollector::new(config);
+//!
+//! // 收集可翻译文本
+//! let texts = collector.collect_translatable_texts(&dom_root)?;
+//!
+//! // 按类型分组
+//! let grouped = collector.group_by_type(&texts);
+//! ```
+//!
+//! ## 性能优化
+//! - 使用引用计数和共享数据结构减少内存分配
+//! - 支持并行处理大型DOM树（需要translation特性）
+//! - 智能预分配容器容量，减少重分配开销
+//! - 优化的去重算法和排序策略
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,7 +55,19 @@ use crate::translation::config::constants;
 use crate::translation::error::TranslationResult;
 use crate::translation::filters::TextFilter;
 
-/// 存储需要翻译的文本及其位置信息
+/// 文本项结构体 - 存储需要翻译的文本及其元数据
+///
+/// 这个结构体包含了一个可翻译文本项的所有信息，包括文本内容、DOM位置、
+/// 类型分类、优先级等。这些信息用于翻译调度、去重、排序等操作。
+///
+/// # 字段说明
+/// - `text`: 实际的文本内容
+/// - `node`: DOM节点的句柄，用于后续更新翻译结果
+/// - `attr_name`: 如果文本来自属性，记录属性名
+/// - `priority`: 翻译优先级，影响处理顺序
+/// - `text_type`: 文本类型分类，用于不同的翻译策略
+/// - `depth`: 在DOM树中的深度，用于排序和复杂度计算
+/// - `parent_tag`: 父元素的标签名，用于上下文分析
 #[derive(Debug, Clone)]
 pub struct TextItem {
     /// 文本内容
@@ -35,7 +86,16 @@ pub struct TextItem {
     pub parent_tag: Option<String>,
 }
 
-/// 文本优先级
+/// 文本翻译优先级枚举
+///
+/// 定义了文本翻译的优先级等级，用于控制翻译处理的顺序。
+/// 数值越大表示优先级越高，会被优先处理。
+///
+/// # 优先级分级
+/// - `Critical`: 关键文本（如页面标题），必须优先翻译
+/// - `High`: 高优先级文本（如按钮、链接），用户交互相关
+/// - `Normal`: 普通文本内容，一般的页面内容
+/// - `Low`: 低优先级文本（如属性、提示文本）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TextPriority {
     Low = 0,
@@ -44,7 +104,20 @@ pub enum TextPriority {
     Critical = 3,
 }
 
-/// 文本类型
+/// 文本类型分类枚举
+///
+/// 根据文本在HTML文档中的语义角色对其进行分类，
+/// 不同类型的文本会采用不同的翻译策略和优先级。
+///
+/// # 类型说明
+/// - `Content`: 普通的文档内容文本
+/// - `Attribute`: HTML元素的属性值，包含属性名信息
+/// - `Title`: 标题文本（h1-h6, title标签等）
+/// - `Link`: 链接文本（a标签内容）
+/// - `Button`: 按钮文本（button、input[type=button]等）
+/// - `FormLabel`: 表单标签文本（label标签等）
+/// - `ImageAlt`: 图片替代文本（img标签的alt属性）
+/// - `Tooltip`: 提示文本（title、aria-label等属性）
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TextType {
     /// 普通文本内容
@@ -138,42 +211,40 @@ impl TextItem {
         let mut weight: f32 = 1.0;
         let text = &self.text;
         let char_count = self.char_count();
-        
+
         if char_count == 0 {
             return 0.0;
         }
-        
-        // 1. 基于文本长度的复杂度
+
+        // 1. 基于文本长度的复杂度：过长或过短的文本翻译难度不同
         if char_count > 200 {
             weight += 0.5; // 长文本增加复杂度
         } else if char_count < 10 {
             weight -= 0.2; // 短文本降低复杂度
         }
-        
-        // 2. 基于标点符号密度
-        let punctuation_count = text.chars()
-            .filter(|c| c.is_ascii_punctuation())
-            .count();
+
+        // 2. 基于标点符号密度：高标点密度可能表示复杂的语法结构
+        let punctuation_count = text.chars().filter(|c| c.is_ascii_punctuation()).count();
         let punctuation_ratio = punctuation_count as f32 / char_count as f32;
         if punctuation_ratio > 0.15 {
             weight += 0.3; // 高标点密度增加复杂度
         }
-        
-        // 3. 基于数字和特殊字符
+
+        // 3. 基于数字和特殊字符：包含数字的文本需要特殊处理
         let digit_count = text.chars().filter(|c| c.is_ascii_digit()).count();
         let digit_ratio = digit_count as f32 / char_count as f32;
         if digit_ratio > 0.1 {
             weight += 0.2; // 包含较多数字
         }
-        
-        // 4. 基于大写字母比例（可能是专有名词）
+
+        // 4. 基于大写字母比例：大量大写字母可能是专有名词或缩写
         let uppercase_count = text.chars().filter(|c| c.is_uppercase()).count();
         let uppercase_ratio = uppercase_count as f32 / char_count as f32;
         if uppercase_ratio > 0.2 {
             weight += 0.3; // 大量大写字母可能是专有名词
         }
-        
-        // 5. 基于文本类型
+
+        // 5. 基于文本类型：不同类型的文本有不同的翻译难度
         match &self.text_type {
             TextType::Title => weight += 0.2,
             TextType::Link => weight -= 0.1,
@@ -182,39 +253,39 @@ impl TextItem {
             TextType::ImageAlt => weight += 0.1,
             TextType::Tooltip => weight += 0.1,
             TextType::Attribute(_) => weight -= 0.2,
-            TextType::Content => {}, // 保持基础权重
+            TextType::Content => {} // 保持基础权重
         }
-        
-        // 6. 基于DOM深度（深层嵌套可能更复杂）
+
+        // 6. 基于DOM深度：深层嵌套可能表示更复杂的上下文
         if self.depth > 10 {
             weight += 0.1;
         }
-        
-        // 7. 基于父标签类型
+
+        // 7. 基于父标签类型：特殊元素（如代码块）增加复杂度
         if let Some(ref parent_tag) = self.parent_tag {
             match parent_tag.as_str() {
-                "code" | "pre" => weight += 0.5, // 代码块更难翻译
-                "script" | "style" => weight += 1.0, // 脚本和样式很复杂
+                "code" | "pre" => weight += 0.5,        // 代码块更难翻译
+                "script" | "style" => weight += 1.0,    // 脚本和样式很复杂
                 "table" | "td" | "th" => weight += 0.2, // 表格内容
                 "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => weight += 0.1, // 标题
                 _ => {}
             }
         }
-        
-        // 8. 检查是否包含HTML实体或特殊字符
+
+        // 8. 检查是否包含HTML实体或特殊字符：需要额外处理的特殊内容
         if text.contains('&') && (text.contains(';') || text.contains('#')) {
             weight += 0.3; // 可能包含HTML实体
         }
-        
-        // 9. 检查是否包含URL或邮箱
+
+        // 9. 检查是否包含URL或邮箱：通常不需翻译或需特殊处理
         if text.contains("http") || text.contains("www.") || text.contains('@') {
             weight += 0.2;
         }
-        
-        // 限制权重范围
+
+        // 限制权重范围在合理区间内
         weight.max(0.5).min(3.0)
     }
-    
+
     /// 计算有效翻译大小（字符数 * 复杂度权重）
     pub fn effective_size(&self) -> f32 {
         self.char_count() as f32 * self.complexity_weight()
@@ -231,7 +302,7 @@ impl TextItem {
                 _ => TextType::Attribute(attr.clone()),
             }
         } else {
-            // 根据节点类型和父元素确定文本类型
+            // 如果不是属性文本，根据节点类型和父元素确定文本类型
             let parent_tag = Self::get_parent_tag(node);
             match parent_tag.as_deref() {
                 Some("title") => TextType::Title,
@@ -254,7 +325,7 @@ impl TextItem {
             TextType::FormLabel | TextType::Tooltip => TextPriority::High,
             TextType::ImageAlt => TextPriority::Normal,
             TextType::Content => {
-                // 根据文本长度和内容确定优先级
+                // 对于内容文本，根据文本长度和内容特征确定优先级
                 if text.len() > 100 {
                     TextPriority::High
                 } else if text.len() > 20 {
@@ -270,14 +341,14 @@ impl TextItem {
     /// 计算节点深度
     fn calculate_depth(_node: &Handle) -> usize {
         // 简化实现，避免复杂的父节点遍历
-        // 在实际使用中，depth参数会从外部传入
+        // 在实际使用中，depth参数会在遍历过程中计算并传入
         0
     }
 
     /// 获取父元素标签名
     fn get_parent_tag(_node: &Handle) -> Option<String> {
         // 简化实现，避免复杂的父节点访问
-        // 在实际使用中可以通过其他方式获取
+        // 在实际使用中可以通过DOM遍历获取父元素信息
         None
     }
 }
@@ -349,17 +420,21 @@ impl TextCollector {
 
         self.stats.reset();
 
+        // 根据编译特性和配置选择收集策略
         #[cfg(feature = "translation")]
         {
             if self.config.enable_parallel {
+                // 使用并行收集（实验性功能）
                 self.collect_parallel(root, &mut texts)?;
             } else {
+                // 使用串行递归收集
                 self.collect_recursive(root, &mut texts, 0);
             }
         }
 
         #[cfg(not(feature = "translation"))]
         {
+            // 无translation特性时只支持串行收集
             self.collect_recursive(root, &mut texts, 0);
         }
 
@@ -440,8 +515,8 @@ impl TextCollector {
             return;
         }
 
-        // 使用 Rc 共享，避免昂贵的克隆
-        nodes.push((node.clone(), depth));  // TODO: 考虑使用 Weak 引用
+        // 使用Rc共享引用，避免昂贵的节点克隆操作
+        nodes.push((node.clone(), depth)); // TODO: 考虑使用Weak引用进一步优化内存
 
         if let NodeData::Element { ref name, .. } = node.data {
             let tag_name = name.local.as_ref();
@@ -562,12 +637,12 @@ impl TextCollector {
         // 使用字符串引用作为键，避免克隆
         let mut seen = HashMap::new();
         let mut unique_texts = Vec::new();
-        
-        // 预分配容量以降低重分配开销
-        unique_texts.reserve(texts.len() / 2);  // 估计去重后为一半
+
+        // 预分配容量以降低重分配开销，估算去重后为原来的一半
+        unique_texts.reserve(texts.len() / 2); // 估计去重后为一半
 
         for item in texts {
-            // 为了HashMap查找，我们仍需要克隆键（但可以在其他地方优化）
+            // 为HashMap查找创建组合键，由于需要哈希和比较，这里无法避免克隆
             let key = (item.text.clone(), item.text_type.clone());
 
             if let Some(&existing_priority) = seen.get(&key) {
@@ -577,16 +652,16 @@ impl TextCollector {
                     if let Some(pos) = unique_texts.iter().position(|t: &TextItem| {
                         t.text == item.text && t.text_type == item.text_type
                     }) {
-                        let item_priority = item.priority;  // 在移动之前保存优先级
-                        unique_texts[pos] = item;  // 移动语义，无需克隆
-                        seen.insert(key, item_priority);  // 使用保存的优先级
+                        let item_priority = item.priority; // 在移动之前保存优先级
+                        unique_texts[pos] = item; // 使用移动语义更新现有项，无需克隆
+                        seen.insert(key, item_priority); // 更新HashMap中的优先级记录
                     }
                 }
                 self.stats.duplicate_texts += 1;
             } else {
                 // 新项，添加到结果中
-                seen.insert(key, item.priority);  // 重用已有的key
-                unique_texts.push(item);
+                seen.insert(key, item.priority); // 在HashMap中记录该文本的优先级
+                unique_texts.push(item); // 将新项添加到结果列表
             }
         }
 
@@ -596,12 +671,13 @@ impl TextCollector {
     /// 按优先级排序
     fn sort_by_priority(&self, texts: &mut Vec<TextItem>) {
         texts.sort_by(|a, b| {
-            // 首先按优先级排序（高优先级在前）
+            // 多维度排序策略：
+            // 1. 优先级（高优先级先处理，确保重要内容优先）
             b.priority
                 .cmp(&a.priority)
-                // 然后按文本长度排序（短文本在前，便于批次处理）
+                // 2. 文本长度（短文本先处理，提供更快的用户反馈）
                 .then_with(|| a.char_count().cmp(&b.char_count()))
-                // 最后按深度排序（浅层在前）
+                // 3. DOM深度（浅层节点通常包含更重要的内容）
                 .then_with(|| a.depth.cmp(&b.depth))
         });
     }
@@ -776,10 +852,17 @@ pub fn collect_high_priority_texts(root: &Handle) -> Vec<TextItem> {
 mod tests {
     use super::*;
     use html5ever::parse_document;
-    use markup5ever_rcdom::{RcDom, Handle};
     use html5ever::tendril::TendrilSink;
+    use markup5ever_rcdom::{Handle, RcDom};
     use std::io::Cursor;
 
+    /// 创建测试用的DOM文档
+    /// 
+    /// # 参数
+    /// - `html`: HTML字符串
+    /// 
+    /// # 返回值
+    /// 解析后的RcDom文档
     fn create_test_dom(html: &str) -> RcDom {
         let mut input = Cursor::new(html);
         parse_document(RcDom::default(), Default::default())
@@ -788,6 +871,13 @@ mod tests {
             .unwrap()
     }
 
+    /// 创建测试用的文本节点
+    /// 
+    /// # 参数
+    /// - `text`: 文本内容
+    /// 
+    /// # 返回值
+    /// DOM节点句柄（简化实现）
     fn create_test_text_node(text: &str) -> Handle {
         let dom = create_test_dom(&format!("<div>{}</div>", text));
         // 获取文本节点需要遍历DOM
@@ -796,30 +886,41 @@ mod tests {
 
     #[test]
     fn test_text_item_complexity_weight_basic() {
+        // 测试基本的复杂度权重计算
         let handle = create_test_text_node("Hello world");
         let item = TextItem::content("Hello world".to_string(), handle, 0);
-        
+
         let weight = item.complexity_weight();
-        assert!(weight >= 0.5 && weight <= 3.0, "Weight should be in range [0.5, 3.0], got {}", weight);
+        assert!(
+            weight >= 0.5 && weight <= 3.0,
+            "Weight should be in range [0.5, 3.0], got {}",
+            weight
+        );
     }
 
     #[test]
     fn test_text_item_complexity_weight_empty_text() {
+        // 测试空文本的复杂度处理
         let handle = create_test_text_node("");
         let item = TextItem::content("".to_string(), handle, 0);
-        
+
         let weight = item.complexity_weight();
         assert_eq!(weight, 0.0, "Empty text should have 0 complexity weight");
     }
 
     #[test]
     fn test_text_item_complexity_weight_long_text() {
+        // 测试长文本的复杂度增加
         let long_text = "A".repeat(300); // 超过200字符的长文本
         let handle = create_test_text_node(&long_text);
         let item = TextItem::content(long_text, handle, 0);
-        
+
         let weight = item.complexity_weight();
-        assert!(weight > 1.0, "Long text should have higher complexity weight, got {}", weight);
+        assert!(
+            weight > 1.0,
+            "Long text should have higher complexity weight, got {}",
+            weight
+        );
     }
 
     #[test]
@@ -827,10 +928,14 @@ mod tests {
         let short_text = "Hi"; // 少于10字符的短文本
         let handle = create_test_text_node(short_text);
         let item = TextItem::content(short_text.to_string(), handle, 0);
-        
+
         let weight = item.complexity_weight();
         // 短文本应该有较低的复杂度，但由于基础权重是1.0，所以可能会轻微超过1.0
-        assert!(weight <= 1.2, "Short text should have relatively low complexity weight, got {}", weight);
+        assert!(
+            weight <= 1.2,
+            "Short text should have relatively low complexity weight, got {}",
+            weight
+        );
     }
 
     #[test]
@@ -838,17 +943,29 @@ mod tests {
         let punctuation_text = "Hello, world! How are you? Fine, thanks."; // 高标点密度
         let handle = create_test_text_node(punctuation_text);
         let item = TextItem::content(punctuation_text.to_string(), handle, 0);
-        
+
         let weight = item.complexity_weight();
         // 检查标点密度计算是否正确
-        let punctuation_count = punctuation_text.chars().filter(|c| c.is_ascii_punctuation()).count();
+        let punctuation_count = punctuation_text
+            .chars()
+            .filter(|c| c.is_ascii_punctuation())
+            .count();
         let punctuation_ratio = punctuation_count as f32 / punctuation_text.chars().count() as f32;
-        
+
         if punctuation_ratio > 0.15 {
-            assert!(weight > 1.0, "High punctuation text should have higher complexity, got {} with ratio {}", weight, punctuation_ratio);
+            assert!(
+                weight > 1.0,
+                "High punctuation text should have higher complexity, got {} with ratio {}",
+                weight,
+                punctuation_ratio
+            );
         } else {
             // 如果标点密度不够高，则只要求在合理范围内
-            assert!(weight >= 0.5 && weight <= 3.0, "Complexity weight should be in valid range, got {}", weight);
+            assert!(
+                weight >= 0.5 && weight <= 3.0,
+                "Complexity weight should be in valid range, got {}",
+                weight
+            );
         }
     }
 
@@ -857,9 +974,13 @@ mod tests {
         let number_text = "Price: $123.45, Tax: 15%, Total: $142.97"; // 包含数字
         let handle = create_test_text_node(number_text);
         let item = TextItem::content(number_text.to_string(), handle, 0);
-        
+
         let weight = item.complexity_weight();
-        assert!(weight > 1.0, "Text with numbers should have higher complexity, got {}", weight);
+        assert!(
+            weight > 1.0,
+            "Text with numbers should have higher complexity, got {}",
+            weight
+        );
     }
 
     #[test]
@@ -867,15 +988,19 @@ mod tests {
         let uppercase_text = "NASA, FBI, CIA and USA"; // 大量大写字母（专有名词）
         let handle = create_test_text_node(uppercase_text);
         let item = TextItem::content(uppercase_text.to_string(), handle, 0);
-        
+
         let weight = item.complexity_weight();
-        assert!(weight > 1.0, "Text with many uppercase letters should have higher complexity, got {}", weight);
+        assert!(
+            weight > 1.0,
+            "Text with many uppercase letters should have higher complexity, got {}",
+            weight
+        );
     }
 
     #[test]
     fn test_text_item_complexity_weight_by_type() {
         let handle = create_test_text_node("Test text");
-        
+
         // 测试不同文本类型的复杂度
         let content_item = TextItem {
             text: "Test text".to_string(),
@@ -886,7 +1011,7 @@ mod tests {
             depth: 0,
             parent_tag: None,
         };
-        
+
         let title_item = TextItem {
             text: "Test text".to_string(),
             node: handle.clone(),
@@ -896,7 +1021,7 @@ mod tests {
             depth: 0,
             parent_tag: Some("h1".to_string()),
         };
-        
+
         let button_item = TextItem {
             text: "Test text".to_string(),
             node: handle.clone(),
@@ -906,63 +1031,123 @@ mod tests {
             depth: 0,
             parent_tag: Some("button".to_string()),
         };
-        
+
         let content_weight = content_item.complexity_weight();
         let title_weight = title_item.complexity_weight();
         let button_weight = button_item.complexity_weight();
-        
-        assert!(title_weight > content_weight, "Title should have higher complexity than content");
-        assert!(button_weight < content_weight, "Button should have lower complexity than content");
+
+        assert!(
+            title_weight > content_weight,
+            "Title should have higher complexity than content"
+        );
+        assert!(
+            button_weight < content_weight,
+            "Button should have lower complexity than content"
+        );
     }
 
     #[test]
     fn test_text_item_effective_size() {
         let handle = create_test_text_node("Hello world");
         let item = TextItem::content("Hello world".to_string(), handle, 0);
-        
+
         let effective_size = item.effective_size();
         let char_count = item.char_count() as f32;
         let complexity = item.complexity_weight();
-        
-        assert_eq!(effective_size, char_count * complexity, "Effective size should equal char_count * complexity_weight");
+
+        assert_eq!(
+            effective_size,
+            char_count * complexity,
+            "Effective size should equal char_count * complexity_weight"
+        );
     }
 
     #[test]
     fn test_text_item_char_count() {
         let handle = create_test_text_node("Hello 世界");
         let item = TextItem::content("Hello 世界".to_string(), handle, 0);
-        
-        assert_eq!(item.char_count(), 8, "Should count Unicode characters correctly");
-        assert_eq!(item.byte_count(), 12, "Should count bytes correctly (Unicode takes more bytes)");
+
+        assert_eq!(
+            item.char_count(),
+            8,
+            "Should count Unicode characters correctly"
+        );
+        assert_eq!(
+            item.byte_count(),
+            12,
+            "Should count bytes correctly (Unicode takes more bytes)"
+        );
     }
 
     #[test]
     fn test_text_priority_calculation() {
-        // 测试不同文本类型的优先级计算
-        assert_eq!(TextItem::calculate_priority(&TextType::Title, "Test"), TextPriority::Critical);
-        assert_eq!(TextItem::calculate_priority(&TextType::Button, "Test"), TextPriority::High);
-        assert_eq!(TextItem::calculate_priority(&TextType::Link, "Test"), TextPriority::High);
-        assert_eq!(TextItem::calculate_priority(&TextType::ImageAlt, "Test"), TextPriority::Normal);
-        assert_eq!(TextItem::calculate_priority(&TextType::Attribute("class".to_string()), "Test"), TextPriority::Low);
-        
+        // 测试不同文本类型的优先级计算算法
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::Title, "Test"),
+            TextPriority::Critical
+        );
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::Button, "Test"),
+            TextPriority::High
+        );
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::Link, "Test"),
+            TextPriority::High
+        );
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::ImageAlt, "Test"),
+            TextPriority::Normal
+        );
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::Attribute("class".to_string()), "Test"),
+            TextPriority::Low
+        );
+
         // 测试内容文本根据长度的优先级
-        assert_eq!(TextItem::calculate_priority(&TextType::Content, &"A".repeat(150)), TextPriority::High);
-        assert_eq!(TextItem::calculate_priority(&TextType::Content, &"A".repeat(30)), TextPriority::Normal);
-        assert_eq!(TextItem::calculate_priority(&TextType::Content, "Short"), TextPriority::Low);
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::Content, &"A".repeat(150)),
+            TextPriority::High
+        );
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::Content, &"A".repeat(30)),
+            TextPriority::Normal
+        );
+        assert_eq!(
+            TextItem::calculate_priority(&TextType::Content, "Short"),
+            TextPriority::Low
+        );
     }
 
     #[test]
     fn test_text_type_determination() {
         let handle = create_test_text_node("Test");
-        
+
         // 测试属性文本类型确定
-        assert_eq!(TextItem::determine_text_type(&handle, &Some("title".to_string())), TextType::Tooltip);
-        assert_eq!(TextItem::determine_text_type(&handle, &Some("alt".to_string())), TextType::ImageAlt);
-        assert_eq!(TextItem::determine_text_type(&handle, &Some("aria-label".to_string())), TextType::Tooltip);
-        assert_eq!(TextItem::determine_text_type(&handle, &Some("placeholder".to_string())), TextType::FormLabel);
-        assert_eq!(TextItem::determine_text_type(&handle, &Some("class".to_string())), TextType::Attribute("class".to_string()));
-        
+        assert_eq!(
+            TextItem::determine_text_type(&handle, &Some("title".to_string())),
+            TextType::Tooltip
+        );
+        assert_eq!(
+            TextItem::determine_text_type(&handle, &Some("alt".to_string())),
+            TextType::ImageAlt
+        );
+        assert_eq!(
+            TextItem::determine_text_type(&handle, &Some("aria-label".to_string())),
+            TextType::Tooltip
+        );
+        assert_eq!(
+            TextItem::determine_text_type(&handle, &Some("placeholder".to_string())),
+            TextType::FormLabel
+        );
+        assert_eq!(
+            TextItem::determine_text_type(&handle, &Some("class".to_string())),
+            TextType::Attribute("class".to_string())
+        );
+
         // 测试非属性文本（这里需要mock父标签，简化为测试默认情况）
-        assert_eq!(TextItem::determine_text_type(&handle, &None), TextType::Content);
+        assert_eq!(
+            TextItem::determine_text_type(&handle, &None),
+            TextType::Content
+        );
     }
 }
