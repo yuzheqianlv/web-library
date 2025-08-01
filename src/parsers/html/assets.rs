@@ -324,8 +324,15 @@ pub fn retrieve_and_embed_asset(
                     // iframe 和 frame 需要特殊处理，它们包含完整的 HTML 文档
                     let frame_dom = html_to_dom(&data, charset.clone());
                     
+                    // 设置iframe处理标记，防止在递归处理中触发翻译
+                    let original_iframe_flag = session.in_iframe_processing;
+                    session.in_iframe_processing = true;
+                    
                     // 递归处理嵌套文档中的所有资源
                     walk(session, &final_url, &frame_dom.document);
+                    
+                    // 恢复原始标记
+                    session.in_iframe_processing = original_iframe_flag;
 
                     // 序列化处理后的文档
                     let mut frame_data: Vec<u8> = Vec::new();

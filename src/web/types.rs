@@ -17,6 +17,16 @@ pub struct CachedHtml {
     pub source_lang: String,
     pub target_lang: String,
     pub created_at: bson::DateTime,
+    /// 处理状态：pending, success, error
+    pub status: String,
+    /// 更新时间
+    pub updated_at: bson::DateTime,
+    /// 过期时间（可选）
+    pub expires_at: Option<bson::DateTime>,
+    /// 文件大小
+    pub file_size: i64,
+    /// 域名
+    pub domain: Option<String>,
 }
 
 /// 应用状态

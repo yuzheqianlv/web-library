@@ -110,7 +110,14 @@ class MonolithTranslator {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || `HTTP ${response.status}`);
+                
+                // 特殊处理429状态码（正在处理中）
+                if (response.status === 429 && errorData.status === 'processing') {
+                    this.showProcessingStatus(errorData);
+                    return;
+                }
+                
+                throw new Error(errorData.message || errorData.error || `HTTP ${response.status}`);
             }
 
             const data = await response.json();
@@ -120,6 +127,54 @@ class MonolithTranslator {
         } finally {
             this.hideLoading();
         }
+    }
+
+    /**
+     * 显示正在处理中的状态
+     * @param {Object} data - 处理状态数据
+     */
+    showProcessingStatus(data) {
+        this.hideLoading();
+        
+        // 显示处理中的提示
+        const processingHtml = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 2rem; text-align: center; background: #f8f9fa;">
+                <div class="processing-spinner" style="width: 48px; height: 48px; border: 4px solid #e3f2fd; border-top: 4px solid #2196f3; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem;"></div>
+                <h3 style="color: #1976d2; margin-bottom: 0.5rem;">页面正在翻译中...</h3>
+                <p style="color: #666; margin-bottom: 1rem;">${data.message || '请稍等片刻，翻译完成后会自动显示结果'}</p>
+                <button onclick="location.reload()" style="background: #2196f3; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">刷新查看结果</button>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            </div>
+        `;
+        
+        const processingBlob = new Blob([processingHtml], { type: 'text/html' });
+        const processingUrl = URL.createObjectURL(processingBlob);
+        
+        // 在所有框架中显示处理中状态
+        this.translatedFrame.src = processingUrl;
+        this.originalFrame.src = processingUrl;
+        this.bilingualTranslated.src = processingUrl;
+        this.bilingualOriginal.src = processingUrl;
+        
+        // 隐藏空状态，显示内容
+        this.emptyState.classList.add('hidden');
+        this.switchMode(this.currentMode);
+        
+        // 设置自动重试机制（30秒后自动重试）
+        setTimeout(() => {
+            const currentUrl = this.urlInput.value.trim();
+            if (currentUrl) {
+                console.log('自动重试翻译:', currentUrl);
+                this.translateUrl(currentUrl);
+            }
+        }, 30000);
+        
+        console.log('显示处理中状态，30秒后将自动重试');
     }
 
     /**

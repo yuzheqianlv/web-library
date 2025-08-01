@@ -18,6 +18,8 @@ pub struct Session {
     cookies: Option<Vec<Cookie>>,
     pub options: MonolithOptions,
     urls: Vec<String>,
+    /// 标记是否在iframe/frame递归处理中，用于防止重复翻译
+    pub in_iframe_processing: bool,
 }
 
 impl Session {
@@ -52,6 +54,7 @@ impl Session {
             client,
             options,
             urls: Vec::new(),
+            in_iframe_processing: false,
         }
     }
 
@@ -195,6 +198,15 @@ impl Session {
                     match response.bytes() {
                         Ok(b) => {
                             data = b.to_vec();
+                            
+                            // 智能资源过滤检查
+                            if !self.should_include_resource(&response_url, data.len() as u64, &media_type) {
+                                if !self.options.silent {
+                                    print_info_message(&format!("{} (filtered by smart filtering)", &cache_key));
+                                }
+                                // 返回空数据或错误，触发资源排除
+                                return Err(self.client.get("").send().unwrap_err());
+                            }
                         }
                         Err(error) => {
                             if !self.options.silent {
@@ -227,5 +239,159 @@ impl Session {
                 }
             }
         }
+    }
+
+    /// 清空已收集的URL列表，防止重复处理
+    pub fn clear_urls(&mut self) {
+        self.urls.clear();
+    }
+
+    /// 重置会话状态以处理新文档
+    pub fn reset_for_new_document(&mut self) {
+        self.urls.clear();
+        self.in_iframe_processing = false;
+    }
+
+    /// 获取当前收集的URL数量（用于调试）
+    pub fn urls_count(&self) -> usize {
+        self.urls.len()
+    }
+
+    /// 智能资源过滤检查
+    pub fn should_include_resource(&self, url: &Url, size: u64, content_type: &str) -> bool {
+        if !self.options.smart_filtering {
+            return true; // 未启用智能过滤
+        }
+
+        match self.options.filtering_level {
+            crate::core::ResourceFilteringLevel::Minimal => self.minimal_filtering(url, size, content_type),
+            crate::core::ResourceFilteringLevel::Moderate => self.moderate_filtering(url, size, content_type),
+            crate::core::ResourceFilteringLevel::Aggressive => self.aggressive_filtering(url, size, content_type),
+            crate::core::ResourceFilteringLevel::Custom => self.custom_filtering(url, size, content_type),
+        }
+    }
+
+    /// 最小过滤：只排除明显的广告和跟踪
+    fn minimal_filtering(&self, url: &Url, _size: u64, _content_type: &str) -> bool {
+        if self.options.exclude_ad_domains {
+            !self.is_ad_or_tracking_domain(url)
+        } else {
+            true
+        }
+    }
+
+    /// 适中过滤：平衡大小和功能性
+    fn moderate_filtering(&self, url: &Url, size: u64, content_type: &str) -> bool {
+        // 检查广告域名
+        if self.options.exclude_ad_domains && self.is_ad_or_tracking_domain(url) {
+            return false;
+        }
+
+        // 大小限制
+        match content_type {
+            t if t.starts_with("image/") => {
+                if let Some(max_size) = self.options.max_image_size_kb {
+                    size <= max_size * 1024
+                } else {
+                    size <= 500 * 1024 // 默认500KB限制
+                }
+            }
+            t if t == "text/css" => {
+                if let Some(max_size) = self.options.max_css_size_kb {
+                    size <= max_size * 1024
+                } else {
+                    size <= 100 * 1024 // 默认100KB限制
+                }
+            }
+            _ => true,
+        }
+    }
+
+    /// 激进过滤：优先考虑大小
+    fn aggressive_filtering(&self, url: &Url, size: u64, content_type: &str) -> bool {
+        // 检查广告域名
+        if self.is_ad_or_tracking_domain(url) {
+            return false;
+        }
+
+        // 严格的大小限制
+        match content_type {
+            t if t.starts_with("image/") => {
+                if let Some(max_size) = self.options.max_image_size_kb {
+                    size <= max_size * 1024
+                } else {
+                    size <= 200 * 1024 // 默认200KB限制
+                }
+            }
+            t if t == "text/css" => {
+                if let Some(max_size) = self.options.max_css_size_kb {
+                    size <= max_size * 1024
+                } else {
+                    size <= 50 * 1024 // 默认50KB限制
+                }
+            }
+            t if t.starts_with("application/javascript") || t == "text/javascript" => {
+                false // 激进模式下排除所有JS
+            }
+            t if t.starts_with("font/") || t.contains("font") => {
+                false // 激进模式下排除所有字体
+            }
+            _ => true,
+        }
+    }
+
+    /// 自定义过滤：使用用户详细配置
+    fn custom_filtering(&self, url: &Url, size: u64, content_type: &str) -> bool {
+        // 使用用户的具体配置选项
+        if self.options.exclude_ad_domains && self.is_ad_or_tracking_domain(url) {
+            return false;
+        }
+
+        match content_type {
+            t if t.starts_with("image/") => {
+                if let Some(max_size) = self.options.max_image_size_kb {
+                    size <= max_size * 1024
+                } else {
+                    true
+                }
+            }
+            t if t == "text/css" => {
+                if let Some(max_size) = self.options.max_css_size_kb {
+                    size <= max_size * 1024
+                } else {
+                    true
+                }
+            }
+            _ => true,
+        }
+    }
+
+    /// 检查是否为广告或跟踪域名
+    fn is_ad_or_tracking_domain(&self, url: &Url) -> bool {
+        let url_str = url.as_str().to_lowercase();
+        let host = url.host_str().unwrap_or("").to_lowercase();
+
+        // 常见的广告和跟踪域名模式
+        let ad_patterns = [
+            "doubleclick", "googleadservices", "googlesyndication",
+            "amazon-adsystem", "facebook.com/tr", "google-analytics",
+            "googletagmanager", "scorecardresearch", "quantserve",
+            "outbrain", "taboola", "adsystem", "/ads/", "/ad/",
+            "tracking", "analytics", "metrics", "telemetry",
+            "pixel", "beacon", "adsense", "admob", "adnxs"
+        ];
+
+        for pattern in &ad_patterns {
+            if url_str.contains(pattern) || host.contains(pattern) {
+                return true;
+            }
+        }
+
+        // 检查小尺寸图片（可能是跟踪像素）
+        if url_str.contains("1x1") || url_str.contains("pixel") {
+            return true;
+        }
+
+        false
     }
 }

@@ -67,6 +67,150 @@ impl LibraryServiceV2 {
         uuid.to_string()
     }
 
+    /// 检查URL是否已存在于数据库中
+    /// 
+    /// # 参数
+    /// * `url` - 要检查的URL
+    /// * `source_lang` - 源语言
+    /// * `target_lang` - 目标语言
+    /// 
+    /// # 返回值
+    /// * `Ok(Some(record))` - URL已存在，返回现有记录
+    /// * `Ok(None)` - URL不存在
+    /// * `Err(error)` - 数据库查询错误
+    pub async fn check_url_exists(
+        &self,
+        url: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<Option<LibraryRecord>, String> {
+        let filter = doc! {
+            "url": url,
+            "source_lang": source_lang,
+            "target_lang": target_lang
+        };
+
+        match self.collection.find_one(filter).await {
+            Ok(Some(cached_html)) => {
+                let record = self.cached_html_to_record(&cached_html, None);
+                Ok(Some(record))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(format!("数据库查询失败: {}", e)),
+        }
+    }
+
+    /// 检查URL是否正在处理中
+    /// 
+    /// # 参数
+    /// * `url` - 要检查的URL
+    /// * `source_lang` - 源语言
+    /// * `target_lang` - 目标语言
+    /// 
+    /// # 返回值
+    /// * `Ok(true)` - URL正在处理中
+    /// * `Ok(false)` - URL未在处理或不存在
+    /// * `Err(error)` - 数据库查询错误
+    pub async fn is_url_processing(
+        &self,
+        url: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<bool, String> {
+        // 首先清理过期的pending记录
+        self.cleanup_expired_pending().await?;
+
+        let filter = doc! {
+            "url": url,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "status": "pending"
+        };
+
+        match self.collection.count_documents(filter).await {
+            Ok(count) => Ok(count > 0),
+            Err(e) => Err(format!("数据库查询失败: {}", e)),
+        }
+    }
+
+    /// 清理过期的pending记录（超过2小时的处理记录视为失败）
+    pub async fn cleanup_expired_pending(&self) -> Result<u64, String> {
+        let now = chrono::Utc::now();
+        let expiry_time = now - chrono::Duration::hours(2);
+
+        let filter = doc! {
+            "status": "pending",
+            "created_at": { "$lt": BsonDateTime::from_chrono(expiry_time) }
+        };
+
+        match self.collection.delete_many(filter).await {
+            Ok(result) => {
+                if result.deleted_count > 0 {
+                    tracing::info!("清理了 {} 个过期的pending记录", result.deleted_count);
+                }
+                Ok(result.deleted_count)
+            }
+            Err(e) => Err(format!("清理过期记录失败: {}", e)),
+        }
+    }
+
+    /// 标记URL为处理中状态
+    /// 
+    /// # 参数
+    /// * `url` - URL
+    /// * `source_lang` - 源语言
+    /// * `target_lang` - 目标语言
+    /// 
+    /// # 返回值
+    /// * `Ok(record_id)` - 成功，返回记录ID
+    /// * `Err(error)` - 插入失败
+    pub async fn mark_url_processing(
+        &self,
+        url: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<String, String> {
+        let record_id = self.generate_record_id(url, source_lang, target_lang);
+        let domain = self.extract_domain_from_url(url);
+        let now = chrono::Utc::now();
+
+        let processing_record = CachedHtml {
+            url: url.to_string(),
+            title: Some("处理中...".to_string()),
+            original_html: "".to_string(),
+            translated_html: "".to_string(),
+            source_lang: source_lang.to_string(),
+            target_lang: target_lang.to_string(),
+            status: "pending".to_string(),
+            created_at: BsonDateTime::from_chrono(now),
+            updated_at: BsonDateTime::from_chrono(now),
+            expires_at: Some(BsonDateTime::from_chrono(now + chrono::Duration::hours(1))), // 1小时后过期
+            file_size: 0,
+            domain: Some(domain.clone()),
+        };
+
+        // 使用原子性upsert操作防止竞态条件
+        let filter = doc! {
+            "url": url,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+        };
+
+        match self.collection.replace_one(filter, &processing_record).upsert(true).await {
+            Ok(result) => {
+                if result.upserted_id.is_some() {
+                    tracing::info!("标记URL为处理中: {} ({}->{})", url, source_lang, target_lang);
+                    Ok(record_id)
+                } else {
+                    // 记录已存在，说明有其他请求正在处理
+                    tracing::warn!("URL已在处理中，拒绝重复请求: {} ({}->{})", url, source_lang, target_lang);
+                    Err("URL正在处理中".to_string())
+                }
+            }
+            Err(e) => Err(format!("标记处理状态失败: {}", e)),
+        }
+    }
+
     /// 将CachedHtml转换为LibraryRecord
     pub fn cached_html_to_record(
         &self,

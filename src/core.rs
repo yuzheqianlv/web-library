@@ -107,6 +107,34 @@ pub struct MonolithOptions {
     pub rewrite_links: bool,
     #[cfg(feature = "translation")]
     pub translation_base_path: Option<String>,
+    
+    // 智能资源过滤选项
+    pub smart_filtering: bool,
+    pub max_image_size_kb: Option<u64>,        // 最大图片大小(KB)
+    pub max_css_size_kb: Option<u64>,          // 最大CSS大小(KB)
+    pub preserve_content_images: bool,         // 保留内容图片
+    pub exclude_decorative_images: bool,       // 排除装饰图片
+    pub exclude_ad_domains: bool,              // 排除广告域名
+    pub filtering_level: ResourceFilteringLevel,
+}
+
+/// 资源过滤级别
+#[derive(Clone, Debug, PartialEq)]
+pub enum ResourceFilteringLevel {
+    /// 最小过滤：只排除明显的垃圾内容（广告、跟踪）
+    Minimal,
+    /// 适中过滤：平衡大小和功能性  
+    Moderate,
+    /// 激进过滤：优先考虑大小，最少资源
+    Aggressive,
+    /// 自定义：使用详细的过滤选项
+    Custom,
+}
+
+impl Default for ResourceFilteringLevel {
+    fn default() -> Self {
+        ResourceFilteringLevel::Moderate
+    }
 }
 
 const ANSI_COLOR_RED: &str = "\x1b[31m";
@@ -220,6 +248,9 @@ pub fn create_monolithic_document(
     mut session: Session,
     target: &str,
 ) -> Result<(Vec<u8>, Option<String>), MonolithError> {
+    // 清空会话中累积的URL，防止重复处理
+    session.clear_urls();
+    
     // 验证和解析目标URL以及获取数据
     let (input_data, target_url) = if target.starts_with("data:") {
         // Data URL
@@ -561,7 +592,10 @@ impl DocumentProcessor {
         input_encoding: Option<String>,
         input_target: Option<String>,
     ) -> Result<(Vec<u8>, Option<String>), MonolithError> {
-        // 1. 验证配置
+        // 1. 清空会话中累积的URL，防止重复处理
+        self.session.clear_urls();
+        
+        // 2. 验证配置  
         let encoding_validator = EncodingValidator::new();
         encoding_validator.validate_options(&self.session.options)?;
 
@@ -580,9 +614,13 @@ impl DocumentProcessor {
         let dom_processor = DomProcessor::new();
         let dom = dom_processor.process_dom(dom, &mut self.session, &base_url)?;
 
-        // 5. 翻译处理（如果启用）
+        // 5. 翻译处理（如果启用且不在iframe递归处理中）
         #[cfg(feature = "translation")]
-        let dom = self.process_translation(dom)?;
+        let dom = if !self.session.in_iframe_processing {
+            self.process_translation(dom)?
+        } else {
+            dom
+        };
 
         #[cfg(not(feature = "translation"))]
         let dom = dom;

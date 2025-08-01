@@ -140,6 +140,30 @@ struct Cli {
     #[arg(long)]
     generate_config: bool,
 
+    /// Enable smart resource filtering to reduce file size
+    #[arg(long)]
+    smart_filter: bool,
+
+    /// Set filtering level (minimal, moderate, aggressive)
+    #[arg(long, value_name = "LEVEL")]
+    filter_level: Option<String>,
+
+    /// Maximum image size in KB
+    #[arg(long, value_name = "SIZE")]
+    max_image_size: Option<u64>,
+
+    /// Maximum CSS size in KB
+    #[arg(long, value_name = "SIZE")]
+    max_css_size: Option<u64>,
+
+    /// Exclude decorative images to save space
+    #[arg(long)]
+    no_decorative_images: bool,
+
+    /// Exclude known ad and tracking domains
+    #[arg(long)]
+    no_ads: bool,
+
     /// URL or file path, use - for STDIN
     target: Option<String>,
 }
@@ -255,6 +279,26 @@ fn main() {
             options.target_language = cli.target_lang;
             options.translation_api_url = cli.translation_api;
         }
+
+        // 智能过滤选项
+        options.smart_filtering = cli.smart_filter;
+        options.max_image_size_kb = cli.max_image_size;
+        options.max_css_size_kb = cli.max_css_size;
+        options.exclude_decorative_images = cli.no_decorative_images;
+        options.exclude_ad_domains = cli.no_ads;
+        
+        // 解析过滤级别
+        options.filtering_level = match cli.filter_level.as_deref() {
+            Some("minimal") => monolith::core::ResourceFilteringLevel::Minimal,
+            Some("moderate") => monolith::core::ResourceFilteringLevel::Moderate,
+            Some("aggressive") => monolith::core::ResourceFilteringLevel::Aggressive,
+            Some("custom") => monolith::core::ResourceFilteringLevel::Custom,
+            Some(level) => {
+                eprintln!("Warning: Unknown filtering level '{}', using 'moderate'.", level);
+                monolith::core::ResourceFilteringLevel::Moderate
+            }
+            None => monolith::core::ResourceFilteringLevel::Moderate,
+        };
 
         cookie_file_path = cli.cookie_file;
         destination = cli.output.clone();
