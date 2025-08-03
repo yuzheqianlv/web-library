@@ -1,497 +1,62 @@
-/* Monolith 网页翻译器 - 主题系统 */
-/* 整合自 theme-base.css - 使用CSS变量系统，支持主题切换 */
+/* Monolith 主题样式 */
 
-/* ==============================================
-   CSS 变量定义 - 设计系统
-   ============================================== */
-
+/* 基础主题变量 */
 :root {
-    /* 字体系统 */
-    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-    --font-base-size: 16px;
-    --font-line-height: 1.6;
-
-    /* 间距系统 */
-    --spacing-xs: 0.25rem;     /* 4px */
-    --spacing-small: 0.5rem;   /* 8px */
-    --spacing-medium: 1rem;    /* 16px */
-    --spacing-large: 1.5rem;   /* 24px */
-    --spacing-xl: 2rem;        /* 32px */
-    --spacing-xxl: 3rem;       /* 48px */
-
-    /* 边框系统 */
-    --border-width: 1px;
-    --border-style: solid;
-    --border-radius: 8px;
-    --border-radius-large: 12px;
-    --border-radius-small: 4px;
-
-    /* 阴影系统 */
-    --shadow-small: 0 1px 3px rgba(0, 0, 0, 0.1);
-    --shadow-medium: 0 2px 8px rgba(0, 0, 0, 0.1);
-    --shadow-large: 0 4px 12px rgba(102, 126, 234, 0.3);
-    --shadow-xlarge: 0 6px 25px rgba(102, 126, 234, 0.4);
-
-    /* 动画系统 */
-    --animation-duration: 0.3s;
-    --animation-duration-slow: 0.5s;
-    --animation-easing: ease;
+    /* 明亮主题 */
+    --theme-bg-primary: #ffffff;
+    --theme-bg-secondary: #f8f9fa;
+    --theme-text-primary: #333333;
+    --theme-text-secondary: #666666;
+    --theme-accent: #667eea;
+    --theme-accent-hover: #5a67d8;
+    --theme-border: #e2e8f0;
+    --theme-shadow: rgba(0, 0, 0, 0.1);
 }
 
-/* ==============================================
-   明亮主题 (默认)
-   ============================================== */
-
-:root,
-.theme-light {
-    /* 主色调 */
-    --color-primary: #667eea;
-    --color-primary-hover: #5a6fd8;
-    --color-secondary: #f8f9fa;
-    --color-secondary-hover: #e9ecef;
-
-    /* 状态色彩 */
-    --color-success: #28a745;
-    --color-success-hover: #218838;
-    --color-warning: #ffc107;
-    --color-warning-hover: #e0a800;
-    --color-error: #dc3545;
-    --color-error-hover: #c82333;
-    --color-info: #17a2b8;
-    --color-info-hover: #138496;
-
-    /* 中性色彩 */
-    --color-background: #f5f5f5;
-    --color-surface: #ffffff;
-    --color-surface-secondary: #f8f9fa;
-    
-    /* 文本色彩 */
-    --color-text-primary: #333333;
-    --color-text-secondary: #666666;
-    --color-text-muted: #999999;
-    --color-text-inverse: #ffffff;
-
-    /* 边框色彩 */
-    --color-border: #e1e5e9;
-    --color-border-light: #f1f3f4;
-    --color-border-dark: #d1d5db;
-
-    /* 特殊色彩 */
-    --color-overlay: rgba(0, 0, 0, 0.5);
-    --color-backdrop: rgba(248, 249, 250, 0.95);
-}
-
-/* ==============================================
-   暗色主题
-   ============================================== */
-
+/* 暗色主题 */
 .theme-dark {
-    /* 主色调 - 保持品牌色 */
-    --color-primary: #667eea;
-    --color-primary-hover: #7c8df0;
-    --color-secondary: #2d3748;
-    --color-secondary-hover: #4a5568;
-
-    /* 状态色彩 - 调整为暗色模式适配 */
-    --color-success: #48bb78;
-    --color-success-hover: #38a169;
-    --color-warning: #ed8936;
-    --color-warning-hover: #dd6b20;
-    --color-error: #f56565;
-    --color-error-hover: #e53e3e;
-    --color-info: #4299e1;
-    --color-info-hover: #3182ce;
-
-    /* 中性色彩 */
-    --color-background: #1a202c;
-    --color-surface: #2d3748;
-    --color-surface-secondary: #4a5568;
-    
-    /* 文本色彩 */
-    --color-text-primary: #f7fafc;
-    --color-text-secondary: #e2e8f0;
-    --color-text-muted: #a0aec0;
-    --color-text-inverse: #1a202c;
-
-    /* 边框色彩 */
-    --color-border: #4a5568;
-    --color-border-light: #2d3748;
-    --color-border-dark: #718096;
-
-    /* 特殊色彩 */
-    --color-overlay: rgba(0, 0, 0, 0.7);
-    --color-backdrop: rgba(45, 55, 72, 0.95);
-
-    /* 暗色模式特有属性 */
-    color-scheme: dark;
+    --theme-bg-primary: #1a202c;
+    --theme-bg-secondary: #2d3748;
+    --theme-text-primary: #f7fafc;
+    --theme-text-secondary: #a0aec0;
+    --theme-accent: #667eea;
+    --theme-accent-hover: #5a67d8;
+    --theme-border: #4a5568;
+    --theme-shadow: rgba(0, 0, 0, 0.3);
 }
 
-/* ==============================================
-   蓝色主题
-   ============================================== */
-
+/* 海洋蓝主题 */
 .theme-blue {
-    /* 主色调 - 海洋蓝 */
-    --color-primary: #2b6cb0;
-    --color-primary-hover: #2c5282;
-    --color-secondary: #ebf8ff;
-    --color-secondary-hover: #bee3f8;
-
-    /* 状态色彩 - 蓝色系适配 */
-    --color-success: #38a169;
-    --color-success-hover: #2f855a;
-    --color-warning: #d69e2e;
-    --color-warning-hover: #b7791f;
-    --color-error: #e53e3e;
-    --color-error-hover: #c53030;
-    --color-info: #3182ce;
-    --color-info-hover: #2c5282;
-
-    /* 中性色彩 */
-    --color-background: #f7fafc;
-    --color-surface: #ffffff;
-    --color-surface-secondary: #ebf8ff;
-    
-    /* 文本色彩 */
-    --color-text-primary: #2d3748;
-    --color-text-secondary: #4a5568;
-    --color-text-muted: #718096;
-    --color-text-inverse: #ffffff;
-
-    /* 边框色彩 */
-    --color-border: #bee3f8;
-    --color-border-light: #e6fffa;
-    --color-border-dark: #90cdf4;
+    --theme-bg-primary: #f0f9ff;
+    --theme-bg-secondary: #e0f2fe;
+    --theme-text-primary: #0f172a;
+    --theme-text-secondary: #475569;
+    --theme-accent: #0284c7;
+    --theme-accent-hover: #0369a1;
+    --theme-border: #bae6fd;
+    --theme-shadow: rgba(2, 132, 199, 0.1);
 }
 
-/* ==============================================
-   绿色主题
-   ============================================== */
-
+/* 自然绿主题 */
 .theme-green {
-    /* 主色调 - 自然绿 */
-    --color-primary: #38a169;
-    --color-primary-hover: #2f855a;
-    --color-secondary: #f0fff4;
-    --color-secondary-hover: #c6f6d5;
-
-    /* 状态色彩 - 绿色系适配 */
-    --color-success: #48bb78;
-    --color-success-hover: #38a169;
-    --color-warning: #ed8936;
-    --color-warning-hover: #dd6b20;
-    --color-error: #f56565;
-    --color-error-hover: #e53e3e;
-    --color-info: #4299e1;
-    --color-info-hover: #3182ce;
-
-    /* 中性色彩 */
-    --color-background: #f7fafc;
-    --color-surface: #ffffff;
-    --color-surface-secondary: #f0fff4;
-    
-    /* 文本色彩 */
-    --color-text-primary: #2d3748;
-    --color-text-secondary: #4a5568;
-    --color-text-muted: #718096;
-    --color-text-inverse: #ffffff;
-
-    /* 边框色彩 */
-    --color-border: #c6f6d5;
-    --color-border-light: #f0fff4;
-    --color-border-dark: #9ae6b4;
+    --theme-bg-primary: #f0fdf4;
+    --theme-bg-secondary: #dcfce7;
+    --theme-text-primary: #14532d;
+    --theme-text-secondary: #166534;
+    --theme-accent: #16a34a;
+    --theme-accent-hover: #15803d;
+    --theme-border: #bbf7d0;
+    --theme-shadow: rgba(22, 163, 74, 0.1);
 }
 
-/* ==============================================
-   主题特定样式覆盖
-   ============================================== */
-
-/* 主题切换按钮样式 */
-.theme-toggle {
-    width: 40px;
-    height: 40px;
-    background: var(--color-secondary);
-    border: var(--border-width) var(--border-style) var(--color-border);
-    border-radius: var(--border-radius);
-    color: var(--color-text-primary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--animation-duration) var(--animation-easing);
-    flex-shrink: 0;
-    position: relative;
-}
-
-.theme-toggle:hover {
-    background: var(--color-primary);
-    color: var(--color-text-inverse);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-large);
-}
-
-.theme-toggle svg {
-    width: 20px;
-    height: 20px;
-    transition: transform var(--animation-duration) var(--animation-easing);
-}
-
-.theme-toggle:hover svg {
-    transform: scale(1.1);
-}
-
-/* 主题选择器 */
-.theme-selector {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    flex-shrink: 0;
-}
-
-.theme-selector label {
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-}
-
-.theme-select {
-    padding: var(--spacing-small) var(--spacing-medium);
-    border: var(--border-width) var(--border-style) var(--color-border);
-    border-radius: var(--border-radius);
-    background: var(--color-surface);
-    color: var(--color-text-primary);
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all var(--animation-duration) var(--animation-easing);
-    min-width: 120px;
-}
-
-.theme-select:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
-}
-
-.theme-select:hover {
-    border-color: var(--color-primary);
-}
-
-/* 主题化的布局组件 */
+/* 应用主题变量到页面 */
 body {
-    font-family: var(--font-family);
-    font-size: var(--font-base-size);
-    line-height: var(--font-line-height);
-    color: var(--color-text-primary);
-    background: var(--color-background);
-    transition: background-color var(--animation-duration) var(--animation-easing),
-                color var(--animation-duration) var(--animation-easing);
+    background-color: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-.navbar {
-    background: var(--color-surface);
-    border-bottom: var(--border-width) var(--border-style) var(--color-border);
-    box-shadow: var(--shadow-medium);
-    transition: background-color var(--animation-duration) var(--animation-easing),
-                border-color var(--animation-duration) var(--animation-easing);
-}
-
-.url-input {
-    border: 2px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text-primary);
-    transition: border-color var(--animation-duration) var(--animation-easing),
-                background-color var(--animation-duration) var(--animation-easing);
-}
-
-.url-input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
-}
-
-.url-input::placeholder {
-    color: var(--color-text-secondary);
-}
-
-.mode-toggle {
-    background: var(--color-secondary);
-    border: var(--border-width) var(--border-style) var(--color-border);
-}
-
-.mode-btn {
-    color: var(--color-text-primary);
-    transition: all var(--animation-duration) var(--animation-easing);
-}
-
-.mode-btn.active {
-    background: var(--color-primary);
-    color: var(--color-text-inverse);
-}
-
-.mode-btn:hover:not(.active) {
-    background: var(--color-secondary-hover);
-}
-
-.bookmarklet-link {
-    background: var(--color-secondary);
-    color: var(--color-text-secondary);
-    border: var(--border-width) var(--border-style) var(--color-border);
-}
-
-.bookmarklet-link:hover {
-    background: var(--color-primary);
-    color: var(--color-text-inverse);
-}
-
-/* 主题化的状态组件 */
-.content-viewer,
-.content-frame,
-.bilingual-container,
-.bilingual-pane {
-    background: var(--color-surface);
-}
-
-.bilingual-pane:first-child {
-    border-right: var(--border-width) var(--border-style) var(--color-border);
-}
-
-.bilingual-labels {
-    background: var(--color-secondary);
-}
-
-.bilingual-label {
-    background: var(--color-secondary);
-    border-bottom: var(--border-width) var(--border-style) var(--color-border);
-    color: var(--color-text-secondary);
-    transition: background-color var(--animation-duration) var(--animation-easing);
-}
-
-.bilingual-label:first-child {
-    border-right: var(--border-width) var(--border-style) var(--color-border);
-}
-
-.empty-state {
-    color: var(--color-text-secondary);
-    background: var(--color-surface);
-}
-
-.empty-state svg {
-    color: var(--color-text-secondary);
-}
-
-.empty-state h2 {
-    color: var(--color-text-primary);
-}
-
-.loading {
-    color: var(--color-text-primary);
-}
-
-.spinner {
-    border: 3px solid var(--color-border);
-    border-top: 3px solid var(--color-primary);
-}
-
-/* 主题化的交互组件 */
-.sync-indicator {
-    background: var(--color-primary);
-    box-shadow: var(--shadow-medium);
-}
-
-.sync-indicator.error {
-    background: var(--color-error);
-}
-
-.error-toast {
-    background: var(--color-error);
-    color: var(--color-text-inverse);
-    box-shadow: var(--shadow-large);
-}
-
-.success-toast {
-    background: var(--color-success);
-    color: var(--color-text-inverse);
-    box-shadow: var(--shadow-large);
-}
-
-.floating-toggle {
-    background: var(--color-primary);
-    box-shadow: var(--shadow-large);
-}
-
-.floating-toggle:hover {
-    background: var(--color-primary-hover);
-    box-shadow: var(--shadow-xlarge);
-}
-
-/* ==============================================
-   主题过渡动画
-   ============================================== */
-
-.theme-transition * {
-    transition: background-color var(--animation-duration-slow) var(--animation-easing),
-                color var(--animation-duration-slow) var(--animation-easing),
-                border-color var(--animation-duration-slow) var(--animation-easing),
-                box-shadow var(--animation-duration-slow) var(--animation-easing) !important;
-}
-
-/* ==============================================
-   特殊主题适配
-   ============================================== */
-
-/* 暗色主题iframe内容反转（针对明亮网页） */
-.theme-dark .content-frame,
-.theme-dark .bilingual-pane {
-    filter: invert(1) hue-rotate(180deg);
-}
-
-/* 高对比度模式适配 */
-@media (prefers-contrast: high) {
-    :root {
-        --border-width: 2px;
-        --shadow-medium: 0 2px 8px rgba(0, 0, 0, 0.3);
-        --shadow-large: 0 4px 12px rgba(0, 0, 0, 0.4);
-    }
-    
-    .toggle-nav-btn,
-    .translate-btn,
-    .theme-toggle {
-        border: 2px solid currentColor;
-    }
-}
-
-/* 减少动画模式适配 */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-    
-    :root {
-        --animation-duration: 0.01ms;
-        --animation-duration-slow: 0.01ms;
-    }
-}
-
-/* ==============================================
-   主题响应式适配
-   ============================================== */
-
-@media (max-width: 768px) {
-    .theme-selector label {
-        display: none;
-    }
-
-    .theme-select {
-        min-width: 100px;
-        font-size: 0.8rem;
-    }
-
-    .error-toast,
-    .success-toast {
-        left: 10px;
-        right: 10px;
-        max-width: none;
-    }
+/* 主题切换动画 */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }

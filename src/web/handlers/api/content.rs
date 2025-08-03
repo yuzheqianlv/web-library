@@ -16,7 +16,38 @@ use crate::core::create_monolithic_document;
 use crate::session::Session;
 use crate::web::types::{AppState, ContentRequest, ContentResponse};
 
-/// 获取内容处理器
+/// 获取内容处理器（已弃用，建议使用 /api/process）
+#[cfg(feature = "web")]
+pub async fn get_content_deprecated(
+    State(state): State<Arc<AppState>>,
+    ExtractJson(request): ExtractJson<ContentRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    tracing::warn!("使用了已弃用的API端点 /api/content，建议使用 /api/process");
+    
+    // 转换为新的ProcessRequest格式
+    let process_request = crate::web::handlers::api::process::ProcessRequest {
+        url: request.url,
+        translate: false, // content端点默认不翻译
+        target_lang: None,
+        options: crate::web::handlers::api::process::ProcessOptions::default(),
+    };
+    
+    // 调用新的统一处理器
+    match crate::web::handlers::api::process::process_url(State(state), ExtractJson(process_request)).await {
+        Ok(Json(response)) => {
+            // 转换为旧的响应格式
+            let legacy_response = ContentResponse {
+                html: response.original_html,
+                title: response.title,
+                url: response.url,
+            };
+            Ok(Json(serde_json::to_value(legacy_response).unwrap()))
+        }
+        Err((status, error)) => Err((status, error))
+    }
+}
+
+/// 原始获取内容处理器
 #[cfg(feature = "web")]
 pub async fn get_content(
     State(state): State<Arc<AppState>>,

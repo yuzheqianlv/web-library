@@ -4,114 +4,110 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Monolith is a Rust library and CLI tool for saving web pages as single HTML files with all resources embedded. The project supports multiple execution modes and optional features through Cargo feature flags.
+Monolith 轻量版是一个精简的 Rust 库和 CLI 工具，专注于通过书签脚本提供便捷的网页保存功能。项目已经过重大轻量化改造，移除复杂功能，专注于核心的书签脚本工作流程。
 
-## Architecture
+## 轻量化架构
 
-### Core Components
+### 核心组件
 
-- **Core Processing**: `src/core.rs` - Main document processing logic with `create_monolithic_document()` and `create_monolithic_document_from_data()`
-- **Environment Management**: `src/env.rs` - Type-safe environment variable system with validation
-- **Network Layer**: `src/network/` - HTTP client, caching, session management, and cookie handling
-- **Parsers**: `src/parsers/` - HTML (html5ever), CSS, JavaScript, and link rewriting
-  - `src/parsers/html/` - Comprehensive HTML processing with DOM manipulation
-  - `src/parsers/link_rewriter.rs` - URL rewriting and resource embedding
-- **Translation System**: `src/translation/` - Optional translation pipeline with external API integration
-  - `src/translation/core/` - Translation engine and service layer
-  - `src/translation/pipeline/` - Text processing pipeline (collection, filtering, batching)
-  - `src/translation/storage/` - Multi-level caching system
-- **Web Server**: `src/web/` - Optional Axum-based web interface with REST API
-  - `src/web/handlers/` - HTTP request handlers and API endpoints
-  - `src/web/library/` - Document library management
-- **Builders**: `src/builders/` - Output format builders (web feature only)
+- **Core Processing**: `src/core.rs` - 主要文档处理逻辑，保持 `create_monolithic_document()` 核心功能
+- **Environment Management**: `src/env.rs` - 简化的环境变量系统
+- **Network Layer**: `src/network/` - HTTP 客户端、缓存、会话管理
+- **Parsers**: `src/parsers/` - HTML、CSS、JavaScript 解析器
+  - `src/parsers/html/` - HTML 处理和 DOM 操作
+  - `src/parsers/link_rewriter.rs` - URL 重写和资源嵌入
+- **Translation System** (可选): `src/translation/` - 简化的翻译功能
+  - `src/translation/core/` - 翻译引擎核心
+  - `src/translation/pipeline/` - 文本处理管道
+- **轻量Web服务器**: `src/web/` - 基于 Axum 的精简 Web 界面
+  - `src/web/handlers/pages.rs` - 主页和预览处理器
+  - `src/web/handlers/api/` - 6个核心API端点
+  - `src/web/routes.rs` - 简化的路由配置
 
-### Execution Modes
+### 执行模式
 
-1. **CLI Tool** (`src/main.rs`): Command-line interface with extensive options
-2. **Web Server** (`src/web_main.rs`): HTTP server with web interface
+1. **CLI Tool** (`src/main.rs`): 命令行界面
+2. **轻量Web服务器** (`src/web_main.rs`): 专注书签脚本的HTTP服务器
 
-### Feature System
+### 简化的功能标志
 
-The project uses Cargo features for optional functionality:
+项目使用 Cargo features 实现可选功能：
 
-- `cli`: Command-line tool (default)
-- `web`: Web server with Axum, MongoDB support
-- `translation`: Translation functionality with markdown-translator integration
-- `vendored-openssl`: Static OpenSSL linking
+- `cli`: 命令行工具 (默认)
+- `web`: 轻量Web服务器 (移除了MongoDB依赖)
+- `translation`: 可选的翻译功能
+- `vendored-openssl`: 静态 OpenSSL 链接
 
-## Development Commands
+### 已移除的组件
 
-### Building
+为实现轻量化，以下组件已被移除：
+- ~~MongoDB 数据库支持~~
+- ~~复杂的库管理系统 (`src/web/library/`)~~
+- ~~批量翻译UI组件~~
+- ~~V2 API系统~~
+- ~~统计系统~~
+- ~~复杂的前端CSS/JS组件~~
+
+## 开发命令
+
+### 构建
+
 ```bash
-# Standard CLI build
-make build
-cargo build --locked
+# 标准 CLI 构建
+cargo build --features="cli"
 
-# GUI functionality has been removed to reduce dependencies
-
-# Web server
+# 轻量Web服务器
 cargo build --bin monolith-web --features="web"
 
-# Translation enabled
-cargo build --features="translation"
+# 包含翻译功能的Web服务器
+cargo build --bin monolith-web --features="web,translation"
+
+# 发布版本构建
+cargo build --release --features="web"
 ```
 
-### Testing
+### 测试
+
 ```bash
-# Run all tests
-make test
-cargo test --locked
+# 运行所有测试
+cargo test
 
-# Run tests for specific features
-cargo test --features="translation" --locked
-cargo test --features="web" --locked
+# 运行特定功能的测试
+cargo test --features="web"
+cargo test --features="web,translation"
 
-# Run specific test modules
-cargo test cli:: --locked
-cargo test core:: --locked
-cargo test translation:: --locked
-
-# Run integration tests
-cargo test --test integration --locked
-
-# Run tests with test output
-cargo test --locked -- --nocapture
+# 运行核心功能测试
+cargo test core::
+cargo test --test integration
 ```
 
-### Code Quality
+### 代码质量
+
 ```bash
-# Format code
-make format
+# 格式化代码
 cargo fmt --all
 
-# Lint code  
-make lint
-cargo clippy --fix --allow-dirty --allow-staged
+# 代码检查
+cargo clippy
 
-# Check formatting and linting (CI-style checks)
-make format-check
-make lint-check
-
-# Install and uninstall
-make install
-make uninstall
-
-# Clean build artifacts
-make clean
-
-# Update dependencies
-make update-lock-file
+# 清理构建产物
+cargo clean
 ```
 
-### Running Applications
+### 运行应用
+
 ```bash
-# CLI tool
+# CLI 工具
 cargo run --bin monolith --features="cli" -- <URL>
 
-# Web server
+# 轻量Web服务器 (推荐)
 cargo run --bin monolith-web --features="web"
 
-# GUI application removed
+# 自定义端口运行
+cargo run --bin monolith-web --features="web" -- --port 8080
+
+# 包含翻译功能的服务器
+cargo run --bin monolith-web --features="web,translation"
 ```
 
 ## Key Dependencies

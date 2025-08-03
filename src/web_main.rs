@@ -79,10 +79,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             bind_addr: "127.0.0.1".to_string(),
             port: 7080,
             static_dir: Some("static".to_string()),
-            #[cfg(feature = "web")]
-            mongo_config: Some(monolith::web::config::MongoConfig::default()),
-            #[cfg(not(feature = "web"))]
-            mongo_config: None,
         }
     });
     

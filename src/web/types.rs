@@ -3,42 +3,13 @@
 #[cfg(feature = "web")]
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "web")]
-use mongodb::{Client as MongoClient, Collection, Database};
+// MongoDB 相关结构已移除 - 轻量化版本不再使用数据库
 
-/// 存储的HTML数据结构
-#[cfg(feature = "web")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedHtml {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub id: Option<mongodb::bson::oid::ObjectId>,
-    pub url: String,
-    pub original_html: String,
-    pub translated_html: String,
-    pub title: Option<String>,
-    pub source_lang: String,
-    pub target_lang: String,
-    pub created_at: bson::DateTime,
-    /// 处理状态：pending, success, error
-    pub status: String,
-    /// 更新时间
-    pub updated_at: bson::DateTime,
-    /// 过期时间（可选）
-    pub expires_at: Option<bson::DateTime>,
-    /// 文件大小
-    pub file_size: i64,
-    /// 域名
-    pub domain: Option<String>,
-}
-
-/// 应用状态
+/// 简化的应用状态 - 轻量化版本
 #[cfg(feature = "web")]
 #[derive(Clone)]
 pub struct AppState {
     pub monolith_options: crate::core::MonolithOptions,
-    pub mongo_client: Option<MongoClient>,
-    pub mongo_collection: Option<Collection<CachedHtml>>,
-    pub mongo_database: Option<Database>,
     pub theme_manager: std::sync::Arc<std::sync::Mutex<crate::web::theme::ThemeManager>>,
 }
 
@@ -59,6 +30,20 @@ pub struct TranslateResponse {
     pub translated_html: String,
     pub title: Option<String>,
     pub url: String,
+}
+
+/// 翻译信息结构（重新导出给其他模块使用）
+#[cfg(feature = "web")]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TranslationInfo {
+    /// 是否启用了翻译
+    pub enabled: bool,
+    /// 目标语言
+    pub target_language: String,
+    /// 翻译是否成功
+    pub success: bool,
+    /// 翻译错误信息（如果有）
+    pub error: Option<String>,
 }
 
 /// 内容请求

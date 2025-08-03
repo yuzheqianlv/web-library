@@ -4,10 +4,7 @@
 
 pub mod config;
 pub mod handlers;
-pub mod library;
 pub mod routes;
-pub mod services;
-pub mod templates;
 pub mod theme;
 pub mod types;
 
@@ -40,53 +37,16 @@ impl WebServer {
         }
     }
 
-    /// 启动 Web 服务器
+    /// 启动 Web 服务器 - 轻量化版本
     #[cfg(feature = "web")]
     pub async fn start(&self) -> Result<(), MonolithError> {
-        use crate::web::types::CachedHtml;
-        use mongodb::Client as MongoClient;
-
-        // 初始化 MongoDB 连接
-        let (mongo_client, mongo_collection, mongo_database) =
-            if let Some(ref mongo_config) = self.config.mongo_config {
-                match MongoClient::with_uri_str(&mongo_config.connection_string).await {
-                    Ok(client) => {
-                        let database = client.database(&mongo_config.database_name);
-                        let collection =
-                            database.collection::<CachedHtml>(&mongo_config.collection_name);
-
-                        // 测试连接
-                        match client.list_database_names().await {
-                            Ok(_) => {
-                                println!("MongoDB 连接成功: {}", mongo_config.connection_string);
-                                (Some(client), Some(collection), Some(database))
-                            }
-                            Err(e) => {
-                                eprintln!("警告: MongoDB 连接失败: {}", e);
-                                eprintln!("继续运行，但缓存功能将不可用");
-                                (None, None, None)
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("警告: 无法初始化 MongoDB 客户端: {}", e);
-                        eprintln!("继续运行，但缓存功能将不可用");
-                        (None, None, None)
-                    }
-                }
-            } else {
-                println!("未配置 MongoDB 缓存");
-                (None, None, None)
-            };
+        println!("启动轻量化 Web 服务器（不使用数据库）");
 
         // 初始化主题管理器
         let theme_manager = std::sync::Mutex::new(theme::ThemeManager::new());
 
         let app_state = Arc::new(AppState {
             monolith_options: self.monolith_options.clone(),
-            mongo_client,
-            mongo_collection,
-            mongo_database,
             theme_manager: Arc::new(theme_manager),
         });
 

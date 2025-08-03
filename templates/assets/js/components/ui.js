@@ -1,817 +1,361 @@
-/**
- * Monolith 网页翻译器 - UI 管理组件
- * 整合自 library-ui.js - 提供统一的UI交互和状态管理
- */
+// Monolith UI 交互组件
 
+/**
+ * UI 管理器类
+ */
 class UIManager {
     constructor() {
-        this.modals = new Map();
-        this.notifications = [];
-        this.loadingElements = new Set();
-        this.animations = new Map();
-        
+        this.isNavbarVisible = true;
+        this.currentViewMode = 'translated';
         this.init();
     }
 
     /**
-     * 初始化UI管理器
+     * 初始化 UI 管理器
      */
     init() {
-        this.setupGlobalStyles();
-        this.bindGlobalEvents();
-        this.initializeAnimations();
-        
-        console.log('UI管理器初始化完成');
+        this.setupScrollSync();
+        this.setupKeyboardShortcuts();
+        this.setupResponsiveHandling();
+        this.bindEvents();
     }
 
     /**
-     * 设置全局样式
+     * 绑定事件
      */
-    setupGlobalStyles() {
-        // 注入必要的CSS样式
-        const styleSheet = document.createElement('style');
-        styleSheet.textContent = `
-            /* 模态框样式 */
-            .ui-modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 10000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                opacity: 0;
-                transition: opacity 0.3s ease;
-            }
-            
-            .ui-modal.show {
-                opacity: 1;
-            }
-            
-            .ui-modal-content {
-                background: var(--color-surface, white);
-                border-radius: var(--border-radius, 8px);
-                box-shadow: var(--shadow-large, 0 4px 20px rgba(0,0,0,0.15));
-                max-width: 90vw;
-                max-height: 90vh;
-                overflow: auto;
-                transform: scale(0.9);
-                transition: transform 0.3s ease;
-            }
-            
-            .ui-modal.show .ui-modal-content {
-                transform: scale(1);
-            }
-            
-            .ui-modal-header {
-                padding: 1.5rem;
-                border-bottom: 1px solid var(--color-border, #e1e5e9);
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-            }
-            
-            .ui-modal-title {
-                font-size: 1.25rem;
-                font-weight: 600;
-                color: var(--color-text-primary, #333);
-                margin: 0;
-            }
-            
-            .ui-modal-close {
-                background: none;
-                border: none;
-                font-size: 1.5rem;
-                cursor: pointer;
-                color: var(--color-text-secondary, #666);
-                transition: color 0.2s ease;
-            }
-            
-            .ui-modal-close:hover {
-                color: var(--color-text-primary, #333);
-            }
-            
-            .ui-modal-body {
-                padding: 1.5rem;
-            }
-            
-            .ui-modal-footer {
-                padding: 1rem 1.5rem;
-                border-top: 1px solid var(--color-border, #e1e5e9);
-                display: flex;
-                gap: 0.75rem;
-                justify-content: flex-end;
-            }
-            
-            /* 加载指示器 */
-            .ui-loading {
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .ui-loading::after {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-                animation: shimmer 1.5s infinite;
-            }
-            
-            @keyframes shimmer {
-                0% { left: -100%; }
-                100% { left: 100%; }
-            }
-            
-            .ui-spinner {
-                display: inline-block;
-                width: 20px;
-                height: 20px;
-                border: 2px solid var(--color-border, #e1e5e9);
-                border-top: 2px solid var(--color-primary, #667eea);
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-            }
-            
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            
-            /* 通知样式 */
-            .ui-notification {
-                position: fixed;
-                top: 80px;
-                right: 20px;
-                min-width: 300px;
-                max-width: 400px;
-                padding: 1rem 1.25rem;
-                border-radius: var(--border-radius, 8px);
-                box-shadow: var(--shadow-large, 0 4px 16px rgba(0,0,0,0.1));
-                z-index: 10001;
-                transform: translateX(100%);
-                transition: transform 0.3s ease;
-                cursor: pointer;
-            }
-            
-            .ui-notification.show {
-                transform: translateX(0);
-            }
-            
-            .ui-notification-success {
-                background: var(--color-success, #28a745);
-                color: white;
-            }
-            
-            .ui-notification-error {
-                background: var(--color-error, #dc3545);
-                color: white;
-            }
-            
-            .ui-notification-warning {
-                background: var(--color-warning, #ffc107);
-                color: #333;
-            }
-            
-            .ui-notification-info {
-                background: var(--color-info, #17a2b8);
-                color: white;
-            }
-            
-            /* 工具提示 */
-            .ui-tooltip {
-                position: absolute;
-                background: rgba(0, 0, 0, 0.8);
-                color: white;
-                padding: 0.5rem 0.75rem;
-                border-radius: 4px;
-                font-size: 0.875rem;
-                white-space: nowrap;
-                z-index: 10002;
-                opacity: 0;
-                transition: opacity 0.2s ease;
-                pointer-events: none;
-            }
-            
-            .ui-tooltip.show {
-                opacity: 1;
-            }
-            
-            /* 确认对话框 */
-            .ui-confirm {
-                width: 400px;
-            }
-            
-            .ui-confirm-message {
-                margin-bottom: 1.5rem;
-                color: var(--color-text-primary, #333);
-                line-height: 1.5;
-            }
-            
-            /* 响应式设计 */
-            @media (max-width: 768px) {
-                .ui-modal-content {
-                    width: 95vw;
-                    margin: 1rem;
-                }
-                
-                .ui-notification {
-                    left: 10px;
-                    right: 10px;
-                    max-width: none;
-                    min-width: auto;
-                }
-                
-                .ui-confirm {
-                    width: auto;
-                }
-            }
-        `;
-        
-        document.head.appendChild(styleSheet);
+    bindEvents() {
+        // 窗口大小变化
+        window.addEventListener('resize', () => {
+            this.handleResize();
+        });
+
+        // 滚动事件
+        window.addEventListener('scroll', () => {
+            this.handleScroll();
+        });
+
+        // 双语模式的滚动同步
+        this.setupBilingualScrollSync();
     }
 
     /**
-     * 绑定全局事件
+     * 设置双语模式滚动同步
      */
-    bindGlobalEvents() {
-        // ESC 键关闭模态框
+    setupBilingualScrollSync() {
+        const bilingualTranslated = document.getElementById('bilingual-translated');
+        const bilingualOriginal = document.getElementById('bilingual-original');
+
+        if (!bilingualTranslated || !bilingualOriginal) return;
+
+        let isScrolling = false;
+
+        const syncScroll = (source, target) => {
+            if (isScrolling) return;
+            isScrolling = true;
+
+            try {
+                const sourceDoc = source.contentDocument || source.contentWindow.document;
+                const targetDoc = target.contentDocument || target.contentWindow.document;
+
+                if (sourceDoc && targetDoc) {
+                    const sourceHeight = sourceDoc.documentElement.scrollHeight;
+                    const targetHeight = targetDoc.documentElement.scrollHeight;
+                    const scrollRatio = sourceDoc.documentElement.scrollTop / (sourceHeight - sourceDoc.documentElement.clientHeight);
+
+                    targetDoc.documentElement.scrollTop = scrollRatio * (targetHeight - targetDoc.documentElement.clientHeight);
+                }
+            } catch (error) {
+                console.warn('滚动同步失败:', error);
+            }
+
+            setTimeout(() => {
+                isScrolling = false;
+            }, 100);
+        };
+
+        // 为两个iframe添加滚动事件监听
+        bilingualTranslated.addEventListener('load', () => {
+            try {
+                const doc = bilingualTranslated.contentDocument || bilingualTranslated.contentWindow.document;
+                doc.addEventListener('scroll', () => {
+                    syncScroll(bilingualTranslated, bilingualOriginal);
+                });
+            } catch (error) {
+                console.warn('无法绑定滚动事件:', error);
+            }
+        });
+
+        bilingualOriginal.addEventListener('load', () => {
+            try {
+                const doc = bilingualOriginal.contentDocument || bilingualOriginal.contentWindow.document;
+                doc.addEventListener('scroll', () => {
+                    syncScroll(bilingualOriginal, bilingualTranslated);
+                });
+            } catch (error) {
+                console.warn('无法绑定滚动事件:', error);
+            }
+        });
+    }
+
+    /**
+     * 设置键盘快捷键
+     */
+    setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeTopModal();
+            // Ctrl+Enter 或 Cmd+Enter: 处理当前URL
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                this.triggerProcessing();
             }
-        });
 
-        // 点击背景关闭模态框
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('ui-modal')) {
-                this.closeModal(e.target.dataset.modalId);
-            }
-        });
-    }
-
-    /**
-     * 初始化动画
-     */
-    initializeAnimations() {
-        this.animations.set('fadeIn', 'opacity 0.3s ease');
-        this.animations.set('slideIn', 'transform 0.3s ease');
-        this.animations.set('scale', 'transform 0.3s ease');
-    }
-
-    // ==============================================
-    // 模态框管理
-    // ==============================================
-
-    /**
-     * 显示模态框
-     * @param {Object} options - 模态框选项
-     * @returns {string} 模态框ID
-     */
-    showModal(options = {}) {
-        const {
-            title = '提示',
-            content = '',
-            size = 'medium',
-            closable = true,
-            backdrop = true,
-            buttons = [],
-            onShow = null,
-            onHide = null
-        } = options;
-
-        const modalId = this.generateId();
-        
-        const modal = document.createElement('div');
-        modal.className = 'ui-modal';
-        modal.dataset.modalId = modalId;
-        
-        modal.innerHTML = `
-            <div class="ui-modal-content ui-modal-${size}">
-                <div class="ui-modal-header">
-                    <h3 class="ui-modal-title">${title}</h3>
-                    ${closable ? '<button class="ui-modal-close">&times;</button>' : ''}
-                </div>
-                <div class="ui-modal-body">
-                    ${content}
-                </div>
-                ${buttons.length > 0 ? `
-                    <div class="ui-modal-footer">
-                        ${buttons.map(btn => `
-                            <button class="btn ${btn.class || 'btn-secondary'}" 
-                                    data-action="${btn.action || 'close'}">
-                                ${btn.text}
-                            </button>
-                        `).join('')}
-                    </div>
-                ` : ''}
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        // 绑定事件
-        if (closable) {
-            const closeBtn = modal.querySelector('.ui-modal-close');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', () => this.closeModal(modalId));
-            }
-        }
-
-        // 绑定按钮事件
-        const actionBtns = modal.querySelectorAll('[data-action]');
-        actionBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const action = btn.dataset.action;
-                if (action === 'close') {
-                    this.closeModal(modalId);
-                } else if (typeof options[action] === 'function') {
-                    options[action](modalId);
+            // Ctrl+1/2/3: 切换查看模式
+            if ((e.ctrlKey || e.metaKey) && ['1', '2', '3'].includes(e.key)) {
+                e.preventDefault();
+                const modes = ['translated', 'original', 'bilingual'];
+                const modeIndex = parseInt(e.key) - 1;
+                if (modes[modeIndex]) {
+                    this.switchViewMode(modes[modeIndex]);
                 }
-            });
-        });
-
-        // 显示动画
-        requestAnimationFrame(() => {
-            modal.classList.add('show');
-        });
-
-        this.modals.set(modalId, {
-            element: modal,
-            options,
-            onShow,
-            onHide
-        });
-
-        if (onShow) onShow(modalId);
-        
-        return modalId;
-    }
-
-    /**
-     * 关闭模态框
-     * @param {string} modalId - 模态框ID
-     */
-    closeModal(modalId) {
-        const modalInfo = this.modals.get(modalId);
-        if (!modalInfo) return;
-
-        const { element, onHide } = modalInfo;
-        
-        element.classList.remove('show');
-        
-        setTimeout(() => {
-            if (element.parentNode) {
-                element.parentNode.removeChild(element);
             }
-            this.modals.delete(modalId);
-            
-            if (onHide) onHide(modalId);
-        }, 300);
+
+            // Ctrl+H: 切换导航栏显示
+            if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+                e.preventDefault();
+                this.toggleNavbar();
+            }
+
+            // Escape: 隐藏提示框
+            if (e.key === 'Escape') {
+                this.hideAllToasts();
+            }
+        });
     }
 
     /**
-     * 关闭最顶层模态框
+     * 设置响应式处理
      */
-    closeTopModal() {
-        const modalIds = Array.from(this.modals.keys());
-        if (modalIds.length > 0) {
-            this.closeModal(modalIds[modalIds.length - 1]);
+    setupResponsiveHandling() {
+        // 检测移动设备
+        this.isMobile = window.innerWidth <= 768;
+        
+        // 移动端自动隐藏导航栏
+        if (this.isMobile) {
+            this.hideNavbarOnMobile();
         }
     }
 
     /**
-     * 关闭所有模态框
+     * 处理窗口大小变化
      */
-    closeAllModals() {
-        Array.from(this.modals.keys()).forEach(modalId => {
-            this.closeModal(modalId);
-        });
+    handleResize() {
+        const wasMobile = this.isMobile;
+        this.isMobile = window.innerWidth <= 768;
+
+        // 如果从桌面端变为移动端
+        if (!wasMobile && this.isMobile) {
+            this.hideNavbarOnMobile();
+        }
+        // 如果从移动端变为桌面端
+        else if (wasMobile && !this.isMobile) {
+            this.showNavbarOnDesktop();
+        }
+
+        // 调整双语模式布局
+        this.adjustBilingualLayout();
     }
 
-    // ==============================================
-    // 确认对话框
-    // ==============================================
+    /**
+     * 处理滚动事件
+     */
+    handleScroll() {
+        // 在滚动时可以添加一些UI效果
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        // 滚动时隐藏导航栏（移动端）
+        if (this.isMobile && scrollTop > 100) {
+            this.autoHideNavbar();
+        }
+    }
+
+    /**
+     * 触发处理
+     */
+    triggerProcessing() {
+        const translateBtn = document.getElementById('translate-btn');
+        if (translateBtn && !translateBtn.disabled) {
+            translateBtn.click();
+        }
+    }
+
+    /**
+     * 切换查看模式
+     * @param {string} mode 模式名称
+     */
+    switchViewMode(mode) {
+        if (window.monolithApp) {
+            window.monolithApp.switchMode(mode);
+        }
+        this.currentViewMode = mode;
+    }
+
+    /**
+     * 切换导航栏显示
+     */
+    toggleNavbar() {
+        if (window.monolithApp) {
+            window.monolithApp.toggleNavbar();
+        }
+        this.isNavbarVisible = !this.isNavbarVisible;
+    }
+
+    /**
+     * 移动端隐藏导航栏
+     */
+    hideNavbarOnMobile() {
+        if (this.isMobile && this.isNavbarVisible) {
+            this.toggleNavbar();
+        }
+    }
+
+    /**
+     * 桌面端显示导航栏
+     */
+    showNavbarOnDesktop() {
+        if (!this.isMobile && !this.isNavbarVisible) {
+            this.toggleNavbar();
+        }
+    }
+
+    /**
+     * 自动隐藏导航栏
+     */
+    autoHideNavbar() {
+        if (this.isNavbarVisible) {
+            setTimeout(() => {
+                if (this.isMobile) {
+                    this.toggleNavbar();
+                }
+            }, 200);
+        }
+    }
+
+    /**
+     * 调整双语模式布局
+     */
+    adjustBilingualLayout() {
+        const bilingualContainer = document.getElementById('bilingual-container');
+        if (!bilingualContainer) return;
+
+        if (this.isMobile) {
+            // 移动端垂直布局
+            bilingualContainer.style.flexDirection = 'column';
+            const panes = bilingualContainer.querySelectorAll('.bilingual-pane');
+            panes.forEach(pane => {
+                pane.style.width = '100%';
+                pane.style.height = '50%';
+            });
+        } else {
+            // 桌面端水平布局
+            bilingualContainer.style.flexDirection = 'row';
+            const panes = bilingualContainer.querySelectorAll('.bilingual-pane');
+            panes.forEach(pane => {
+                pane.style.width = '50%';
+                pane.style.height = '100%';
+            });
+        }
+    }
+
+    /**
+     * 隐藏所有提示框
+     */
+    hideAllToasts() {
+        const toasts = document.querySelectorAll('.error-toast, .success-toast');
+        toasts.forEach(toast => {
+            toast.classList.remove('show');
+        });
+    }
 
     /**
      * 显示确认对话框
-     * @param {string} message - 确认消息
-     * @param {Object} options - 选项
-     * @returns {Promise<boolean>} 用户选择结果
+     * @param {string} message 消息内容
+     * @returns {boolean} 用户确认结果
      */
-    confirm(message, options = {}) {
-        return new Promise((resolve) => {
-            const {
-                title = '确认',
-                confirmText = '确定',
-                cancelText = '取消',
-                type = 'warning'
-            } = options;
-
-            const modalId = this.showModal({
-                title,
-                content: `<div class="ui-confirm-message">${message}</div>`,
-                size: 'small',
-                buttons: [
-                    { text: cancelText, action: 'cancel', class: 'btn-secondary' },
-                    { text: confirmText, action: 'confirm', class: `btn-${type === 'danger' ? 'danger' : 'primary'}` }
-                ],
-                cancel: () => {
-                    this.closeModal(modalId);
-                    resolve(false);
-                },
-                confirm: () => {
-                    this.closeModal(modalId);
-                    resolve(true);
-                }
-            });
-        });
+    showConfirm(message) {
+        return confirm(message);
     }
 
     /**
-     * 显示警告对话框
-     * @param {string} message - 警告消息
-     * @param {Object} options - 选项
-     * @returns {Promise<void>}
+     * 创建加载指示器
+     * @param {HTMLElement} container 容器元素
+     * @returns {HTMLElement} 加载指示器元素
      */
-    alert(message, options = {}) {
-        return new Promise((resolve) => {
-            const {
-                title = '提示',
-                buttonText = '确定'
-            } = options;
-
-            const modalId = this.showModal({
-                title,
-                content: `<div class="ui-confirm-message">${message}</div>`,
-                size: 'small',
-                buttons: [
-                    { text: buttonText, action: 'ok', class: 'btn-primary' }
-                ],
-                ok: () => {
-                    this.closeModal(modalId);
-                    resolve();
-                }
-            });
-        });
-    }
-
-    // ==============================================
-    // 通知系统
-    // ==============================================
-
-    /**
-     * 显示通知
-     * @param {string} message - 通知消息
-     * @param {string} type - 通知类型
-     * @param {Object} options - 选项
-     * @returns {string} 通知ID
-     */
-    notify(message, type = 'info', options = {}) {
-        const {
-            duration = 4000,
-            closable = true,
-            position = 'top-right'
-        } = options;
-
-        const notificationId = this.generateId();
+    createLoadingIndicator(container) {
+        const loader = document.createElement('div');
+        loader.className = 'loading-indicator';
+        loader.innerHTML = `
+            <div class="spinner"></div>
+            <span>处理中...</span>
+        `;
         
-        const notification = document.createElement('div');
-        notification.className = `ui-notification ui-notification-${type}`;
-        notification.dataset.notificationId = notificationId;
-        notification.textContent = message;
-
-        // 设置位置
-        this.setNotificationPosition(notification, position);
-
-        document.body.appendChild(notification);
-
-        // 显示动画
-        requestAnimationFrame(() => {
-            notification.classList.add('show');
-        });
-
-        // 自动关闭
-        const timer = setTimeout(() => {
-            this.closeNotification(notificationId);
-        }, duration);
-
-        // 点击关闭
-        if (closable) {
-            notification.addEventListener('click', () => {
-                clearTimeout(timer);
-                this.closeNotification(notificationId);
-            });
+        if (container) {
+            container.appendChild(loader);
         }
-
-        this.notifications.push({
-            id: notificationId,
-            element: notification,
-            timer
-        });
-
-        return notificationId;
-    }
-
-    /**
-     * 设置通知位置
-     * @param {HTMLElement} element - 通知元素
-     * @param {string} position - 位置
-     */
-    setNotificationPosition(element, position) {
-        const positions = {
-            'top-right': { top: '80px', right: '20px' },
-            'top-left': { top: '80px', left: '20px' },
-            'bottom-right': { bottom: '20px', right: '20px' },
-            'bottom-left': { bottom: '20px', left: '20px' },
-            'top-center': { top: '80px', left: '50%', transform: 'translateX(-50%)' },
-            'bottom-center': { bottom: '20px', left: '50%', transform: 'translateX(-50%)' }
-        };
-
-        const positionStyle = positions[position] || positions['top-right'];
-        Object.assign(element.style, positionStyle);
-    }
-
-    /**
-     * 关闭通知
-     * @param {string} notificationId - 通知ID
-     */
-    closeNotification(notificationId) {
-        const notificationIndex = this.notifications.findIndex(n => n.id === notificationId);
-        if (notificationIndex === -1) return;
-
-        const { element, timer } = this.notifications[notificationIndex];
         
-        clearTimeout(timer);
-        element.classList.remove('show');
-        
-        setTimeout(() => {
-            if (element.parentNode) {
-                element.parentNode.removeChild(element);
-            }
-        }, 300);
-
-        this.notifications.splice(notificationIndex, 1);
-    }
-
-    // ==============================================
-    // 加载状态管理
-    // ==============================================
-
-    /**
-     * 显示加载状态
-     * @param {HTMLElement|string} target - 目标元素或选择器
-     * @param {Object} options - 选项
-     */
-    showLoading(target, options = {}) {
-        const element = typeof target === 'string' ? document.querySelector(target) : target;
-        if (!element) return;
-
-        const {
-            type = 'shimmer', // shimmer, spinner, overlay
-            message = '',
-            disableElement = true
-        } = options;
-
-        if (disableElement && element.tagName === 'BUTTON') {
-            element.disabled = true;
-        }
-
-        if (type === 'shimmer') {
-            element.classList.add('ui-loading');
-        } else if (type === 'spinner') {
-            const spinner = document.createElement('span');
-            spinner.className = 'ui-spinner';
-            spinner.dataset.loadingSpinner = 'true';
-            element.appendChild(spinner);
-        } else if (type === 'overlay') {
-            const overlay = document.createElement('div');
-            overlay.className = 'ui-loading-overlay';
-            overlay.innerHTML = `
-                <div class="ui-spinner"></div>
-                ${message ? `<div class="ui-loading-message">${message}</div>` : ''}
-            `;
-            overlay.style.cssText = `
-                position: absolute;
-                top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(255,255,255,0.8);
-                display: flex; flex-direction: column;
-                align-items: center; justify-content: center;
-                z-index: 1000;
-            `;
-            
-            element.style.position = 'relative';
-            element.appendChild(overlay);
-        }
-
-        this.loadingElements.add(element);
+        return loader;
     }
 
     /**
-     * 隐藏加载状态
-     * @param {HTMLElement|string} target - 目标元素或选择器
+     * 移除加载指示器
+     * @param {HTMLElement} loader 加载指示器元素
      */
-    hideLoading(target) {
-        const element = typeof target === 'string' ? document.querySelector(target) : target;
-        if (!element) return;
-
-        // 移除shimmer效果
-        element.classList.remove('ui-loading');
-
-        // 移除spinner
-        const spinners = element.querySelectorAll('[data-loading-spinner]');
-        spinners.forEach(spinner => spinner.remove());
-
-        // 移除overlay
-        const overlays = element.querySelectorAll('.ui-loading-overlay');
-        overlays.forEach(overlay => overlay.remove());
-
-        // 重新启用元素
-        if (element.tagName === 'BUTTON') {
-            element.disabled = false;
-        }
-
-        this.loadingElements.delete(element);
-    }
-
-    // ==============================================
-    // 工具提示
-    // ==============================================
-
-    /**
-     * 显示工具提示
-     * @param {HTMLElement} target - 目标元素
-     * @param {string} text - 提示文本
-     * @param {Object} options - 选项
-     */
-    showTooltip(target, text, options = {}) {
-        const {
-            position = 'top',
-            delay = 500
-        } = options;
-
-        const tooltip = document.createElement('div');
-        tooltip.className = 'ui-tooltip';
-        tooltip.textContent = text;
-        
-        document.body.appendChild(tooltip);
-
-        const targetRect = target.getBoundingClientRect();
-        const tooltipRect = tooltip.getBoundingClientRect();
-        
-        let top, left;
-        
-        switch (position) {
-            case 'top':
-                top = targetRect.top - tooltipRect.height - 8;
-                left = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
-                break;
-            case 'bottom':
-                top = targetRect.bottom + 8;
-                left = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
-                break;
-            case 'left':
-                top = targetRect.top + (targetRect.height - tooltipRect.height) / 2;
-                left = targetRect.left - tooltipRect.width - 8;
-                break;
-            case 'right':
-                top = targetRect.top + (targetRect.height - tooltipRect.height) / 2;
-                left = targetRect.right + 8;
-                break;
-        }
-
-        tooltip.style.top = Math.max(8, top) + 'px';
-        tooltip.style.left = Math.max(8, Math.min(window.innerWidth - tooltipRect.width - 8, left)) + 'px';
-
-        setTimeout(() => {
-            tooltip.classList.add('show');
-        }, delay);
-
-        // 自动移除
-        target.addEventListener('mouseleave', () => {
-            tooltip.remove();
-        }, { once: true });
-    }
-
-    // ==============================================
-    // 实用工具
-    // ==============================================
-
-    /**
-     * 生成唯一ID
-     * @returns {string} 唯一ID
-     */
-    generateId() {
-        return 'ui_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
-    }
-
-    /**
-     * 平滑滚动到元素
-     * @param {HTMLElement|string} target - 目标元素或选择器
-     * @param {Object} options - 选项
-     */
-    scrollTo(target, options = {}) {
-        const element = typeof target === 'string' ? document.querySelector(target) : target;
-        if (!element) return;
-
-        const {
-            behavior = 'smooth',
-            block = 'start',
-            inline = 'nearest',
-            offset = 0
-        } = options;
-
-        const elementRect = element.getBoundingClientRect();
-        const targetTop = window.pageYOffset + elementRect.top - offset;
-
-        window.scrollTo({
-            top: targetTop,
-            behavior
-        });
-    }
-
-    /**
-     * 复制文本到剪贴板
-     * @param {string} text - 要复制的文本
-     * @returns {Promise<boolean>} 复制是否成功
-     */
-    async copyToClipboard(text) {
-        try {
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(text);
-                return true;
-            } else {
-                // 降级方案
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                textArea.style.cssText = 'position: fixed; top: -1000px; left: -1000px;';
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                
-                const successful = document.execCommand('copy');
-                document.body.removeChild(textArea);
-                return successful;
-            }
-        } catch (error) {
-            console.error('复制到剪贴板失败:', error);
-            return false;
+    removeLoadingIndicator(loader) {
+        if (loader && loader.parentNode) {
+            loader.parentNode.removeChild(loader);
         }
     }
 
     /**
-     * 检查元素是否在视口中
-     * @param {HTMLElement} element - 要检查的元素
-     * @param {number} threshold - 阈值（0-1）
-     * @returns {boolean} 是否在视口中
+     * 设置滚动同步
      */
-    isInViewport(element, threshold = 0) {
-        const rect = element.getBoundingClientRect();
-        const windowHeight = window.innerHeight || document.documentElement.clientHeight;
-        const windowWidth = window.innerWidth || document.documentElement.clientWidth;
-        
-        const vertInView = (rect.top + rect.height * threshold) <= windowHeight && 
-                          (rect.top + rect.height * (1 - threshold)) >= 0;
-        const horInView = (rect.left + rect.width * threshold) <= windowWidth && 
-                         (rect.left + rect.width * (1 - threshold)) >= 0;
-        
-        return vertInView && horInView;
+    setupScrollSync() {
+        // 这个方法为将来的滚动同步功能预留
+        console.log('滚动同步已设置');
     }
 
     /**
-     * 防抖函数
-     * @param {Function} func - 要防抖的函数
-     * @param {number} wait - 等待时间
-     * @returns {Function} 防抖后的函数
+     * 获取当前UI状态
+     * @returns {Object} UI状态对象
      */
-    debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
+    getUIState() {
+        return {
+            isNavbarVisible: this.isNavbarVisible,
+            currentViewMode: this.currentViewMode,
+            isMobile: this.isMobile
         };
     }
 
     /**
-     * 销毁UI管理器
+     * 重置UI状态
      */
-    destroy() {
-        this.closeAllModals();
-        this.notifications.forEach(n => this.closeNotification(n.id));
-        this.loadingElements.forEach(element => this.hideLoading(element));
+    resetUIState() {
+        this.isNavbarVisible = true;
+        this.currentViewMode = 'translated';
+        this.hideAllToasts();
         
-        console.log('UI管理器已销毁');
+        // 重置导航栏显示
+        const navbar = document.getElementById('navbar');
+        const floatingToggle = document.getElementById('floating-toggle');
+        
+        if (navbar) {
+            navbar.classList.remove('hidden');
+        }
+        if (floatingToggle) {
+            floatingToggle.classList.remove('show');
+        }
     }
 }
 
-// 导出给全局使用
-window.UIManager = UIManager;
+// 创建全局UI管理器实例
+document.addEventListener('DOMContentLoaded', () => {
+    window.uiManager = new UIManager();
+});

@@ -1,577 +1,300 @@
-/**
- * Monolith 网页翻译器 - 应用管理核心
- * 整合自 library-manager.js - 提供统一的应用生命周期管理
- */
+// Monolith 应用管理器
 
-class AppManager {
+/**
+ * 应用管理器类
+ */
+class MonolithApp {
     constructor() {
-        this.components = new Map();
-        this.initialized = false;
-        this.config = {};
-        this.eventBus = new EventTarget();
-        
-        // 绑定全局错误处理
-        this.setupGlobalErrorHandling();
+        this.currentMode = 'translated';
+        this.isProcessing = false;
+        this.initializeElements();
+        this.bindEvents();
+        this.loadSettings();
     }
 
     /**
-     * 初始化应用
-     * @param {Object} config - 应用配置
+     * 初始化DOM元素引用
      */
-    async init(config = {}) {
-        if (this.initialized) {
-            console.warn('应用已初始化');
+    initializeElements() {
+        this.elements = {
+            urlInput: document.getElementById('url-input'),
+            translateBtn: document.getElementById('translate-btn'),
+            modeButtons: document.querySelectorAll('.mode-btn'),
+            contentFrames: {
+                translated: document.getElementById('translated-frame'),
+                original: document.getElementById('original-frame'),
+                bilingual: document.getElementById('bilingual-container')
+            },
+            emptyState: document.getElementById('empty-state'),
+            loading: document.getElementById('loading'),
+            errorToast: document.getElementById('error-toast'),
+            successToast: document.getElementById('success-toast'),
+            navbar: document.getElementById('navbar'),
+            toggleNavBtn: document.getElementById('toggle-nav-btn'),
+            floatingToggle: document.getElementById('floating-toggle')
+        };
+    }
+
+    /**
+     * 绑定事件监听器
+     */
+    bindEvents() {
+        // URL输入框回车事件
+        this.elements.urlInput?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.processUrl();
+            }
+        });
+
+        // 翻译按钮点击事件
+        this.elements.translateBtn?.addEventListener('click', () => {
+            this.processUrl();
+        });
+
+        // 模式切换按钮事件
+        this.elements.modeButtons?.forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.switchMode(btn.dataset.mode);
+            });
+        });
+
+        // 导航栏切换事件
+        this.elements.toggleNavBtn?.addEventListener('click', () => {
+            this.toggleNavbar();
+        });
+
+        this.elements.floatingToggle?.addEventListener('click', () => {
+            this.toggleNavbar();
+        });
+
+        // 页面加载时检查URL参数
+        this.checkUrlParams();
+    }
+
+    /**
+     * 检查URL参数自动处理
+     */
+    checkUrlParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoUrl = urlParams.get('url');
+        if (autoUrl && this.elements.urlInput) {
+            this.elements.urlInput.value = autoUrl;
+            this.processUrl();
+        }
+    }
+
+    /**
+     * 处理URL
+     */
+    async processUrl() {
+        const url = this.elements.urlInput?.value?.trim();
+        if (!url) {
+            this.showError('请输入要处理的网页URL');
             return;
         }
 
+        if (this.isProcessing) {
+            return;
+        }
+
+        this.setProcessing(true);
+        this.hideContent();
+        this.showLoading();
+
         try {
-            console.log('开始初始化 Monolith 应用...');
-            
-            this.config = {
-                theme: 'light',
-                language: 'zh',
-                debug: false,
-                ...config
+            const data = {
+                url: url,
+                translate: true,
+                target_lang: 'zh',
+                options: {
+                    no_css: false,
+                    no_js: true, // 默认禁用JS以提高安全性
+                    no_images: false,
+                    no_fonts: false,
+                    timeout: 30
+                }
             };
 
-            // 初始化各个组件
-            await this.initializeComponents();
-            
-            // 加载应用配置
-            await this.loadAppConfig();
-            
-            // 设置全局函数
-            this.setupGlobalFunctions();
-            
-            // 绑定全局事件
-            this.bindGlobalEvents();
-            
-            this.initialized = true;
-            this.emit('app:initialized', { config: this.config });
-            
-            console.log('✅ Monolith 应用初始化完成');
-        } catch (error) {
-            console.error('❌ 应用初始化失败:', error);
-            this.emit('app:error', { error, phase: 'initialization' });
-            throw error;
-        }
-    }
+            const result = await window.monolithAPI.process(data);
 
-    /**
-     * 初始化组件
-     */
-    async initializeComponents() {
-        const componentPromises = [];
-
-        // API管理器
-        if (window.ApiManager) {
-            const apiManager = new window.ApiManager();
-            this.registerComponent('api', apiManager);
-            componentPromises.push(Promise.resolve());
-        }
-
-        // 主题管理器
-        if (window.ThemeManager) {
-            const themeManager = new window.ThemeManager();
-            this.registerComponent('theme', themeManager);
-            componentPromises.push(Promise.resolve());
-        }
-
-        // 翻译器组件
-        if (window.MonolithTranslator) {
-            const translator = new window.MonolithTranslator();
-            this.registerComponent('translator', translator);
-            componentPromises.push(Promise.resolve());
-        }
-
-        // 库管理器
-        if (window.LibraryManager) {
-            const libraryManager = new window.LibraryManager();
-            this.registerComponent('library', libraryManager);
-            componentPromises.push(libraryManager.init ? libraryManager.init() : Promise.resolve());
-        }
-
-        // UI管理器
-        if (window.UIManager) {
-            const uiManager = new window.UIManager();
-            this.registerComponent('ui', uiManager);
-            componentPromises.push(Promise.resolve());
-        }
-
-        // 等待所有组件初始化完成
-        await Promise.all(componentPromises);
-        console.log('所有组件初始化完成');
-    }
-
-    /**
-     * 加载应用配置
-     */
-    async loadAppConfig() {
-        try {
-            const response = await fetch('/assets/config/app.json');
-            if (response.ok) {
-                const appConfig = await response.json();
-                this.config = { ...this.config, ...appConfig };
-                console.log('应用配置加载完成:', this.config);
-            }
-        } catch (error) {
-            console.warn('加载应用配置失败，使用默认配置:', error);
-        }
-    }
-
-    /**
-     * 注册组件
-     * @param {string} name - 组件名称
-     * @param {Object} component - 组件实例
-     */
-    registerComponent(name, component) {
-        this.components.set(name, component);
-        console.log(`组件注册完成: ${name}`);
-        
-        // 触发组件注册事件
-        this.emit('component:registered', { name, component });
-    }
-
-    /**
-     * 获取组件
-     * @param {string} name - 组件名称
-     * @returns {Object|null} 组件实例
-     */
-    getComponent(name) {
-        return this.components.get(name) || null;
-    }
-
-    /**
-     * 设置全局函数
-     */
-    setupGlobalFunctions() {
-        // 库管理相关的全局函数
-        const libraryManager = this.getComponent('library');
-        if (libraryManager) {
-            window.viewRecord = (id, url) => this.handleViewRecord(id, url);
-            window.deleteRecord = (id) => this.handleDeleteRecord(id);
-            window.selectAllRecords = (checked) => this.handleSelectAllRecords(checked);
-            window.selectRecord = (id, checked) => this.handleSelectRecord(id, checked);
-        }
-
-        // 主题相关的全局函数
-        const themeManager = this.getComponent('theme');
-        if (themeManager) {
-            window.switchTheme = (themeName) => this.handleSwitchTheme(themeName);
-            window.toggleTheme = () => this.handleToggleTheme();
-        }
-
-        // 翻译相关的全局函数
-        const translator = this.getComponent('translator');
-        if (translator) {
-            window.translateUrl = (url, targetLang) => this.handleTranslateUrl(url, targetLang);
-        }
-
-        // 通用工具函数
-        window.showToast = (message, type) => this.showToast(message, type);
-        window.confirmAction = (message) => this.confirmAction(message);
-        
-        console.log('全局函数设置完成');
-    }
-
-    /**
-     * 绑定全局事件
-     */
-    bindGlobalEvents() {
-        // 页面卸载事件
-        window.addEventListener('beforeunload', () => {
-            this.cleanup();
-        });
-
-        // 页面可见性变化
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                this.emit('app:hidden');
+            if (result.status === 'success') {
+                this.displayContent(result);
+                this.showSuccess('网页处理完成');
             } else {
-                this.emit('app:visible');
+                throw new Error(result.error || '处理失败');
             }
-        });
-
-        // 网络状态变化
-        window.addEventListener('online', () => {
-            this.emit('network:online');
-            console.log('网络连接恢复');
-        });
-
-        window.addEventListener('offline', () => {
-            this.emit('network:offline');
-            console.log('网络连接断开');
-        });
-
-        // 键盘快捷键
-        document.addEventListener('keydown', (e) => {
-            this.handleKeyboardShortcuts(e);
-        });
-        
-        console.log('全局事件绑定完成');
+        } catch (error) {
+            console.error('处理失败:', error);
+            this.showError(`处理失败: ${error.message}`);
+        } finally {
+            this.setProcessing(false);
+            this.hideLoading();
+        }
     }
 
     /**
-     * 设置全局错误处理
+     * 显示处理结果
      */
-    setupGlobalErrorHandling() {
-        // 全局JavaScript错误
-        window.addEventListener('error', (event) => {
-            console.error('全局JavaScript错误:', event.error);
-            this.emit('app:error', { 
-                error: event.error, 
-                filename: event.filename,
-                lineno: event.lineno,
-                colno: event.colno 
-            });
-        });
+    displayContent(result) {
+        // 隐藏空状态
+        this.elements.emptyState?.classList.add('hidden');
 
-        // Promise未捕获错误
-        window.addEventListener('unhandledrejection', (event) => {
-            console.error('未捕获的Promise错误:', event.reason);
-            this.emit('app:error', { 
-                error: event.reason, 
-                type: 'unhandledrejection' 
-            });
-        });
-    }
-
-    /**
-     * 处理键盘快捷键
-     * @param {KeyboardEvent} e - 键盘事件
-     */
-    handleKeyboardShortcuts(e) {
-        // Ctrl/Cmd + / 显示帮助
-        if ((e.ctrlKey || e.metaKey) && e.key === '/') {
-            e.preventDefault();
-            this.showHelp();
+        // 更新原文iframe
+        if (this.elements.contentFrames.original && result.original_html) {
+            this.elements.contentFrames.original.srcdoc = result.original_html;
         }
 
-        // Ctrl/Cmd + K 快速搜索
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-            e.preventDefault();
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.focus();
-            }
+        // 更新译文iframe
+        if (this.elements.contentFrames.translated && result.translated_html) {
+            this.elements.contentFrames.translated.srcdoc = result.translated_html;
+        } else if (this.elements.contentFrames.translated && result.original_html) {
+            // 如果没有译文，显示原文
+            this.elements.contentFrames.translated.srcdoc = result.original_html;
         }
 
-        // ESC 关闭模态框
-        if (e.key === 'Escape') {
-            this.closeModals();
-        }
-    }
-
-    // ==============================================
-    // 全局函数处理器
-    // ==============================================
-
-    async handleViewRecord(id, url) {
-        try {
-            console.log(`查看记录: ${id}`);
+        // 更新双语对照
+        if (this.elements.contentFrames.bilingual) {
+            const bilingualTranslated = document.getElementById('bilingual-translated');
+            const bilingualOriginal = document.getElementById('bilingual-original');
             
-            if (url && this.isValidUrl(url)) {
-                window.open(url, '_blank');
-            } else {
-                // 通过API获取记录详情
-                const apiManager = this.getComponent('api');
-                if (apiManager) {
-                    const record = await apiManager.apiCall(`/api/v2/library/${id}`);
-                    if (record.original_url) {
-                        window.open(record.original_url, '_blank');
-                    }
-                }
+            if (bilingualTranslated && result.translated_html) {
+                bilingualTranslated.srcdoc = result.translated_html;
+            } else if (bilingualTranslated && result.original_html) {
+                bilingualTranslated.srcdoc = result.original_html;
             }
             
-            this.emit('record:viewed', { id, url });
-        } catch (error) {
-            console.error('查看记录失败:', error);
-            this.showToast('查看记录失败', 'error');
-        }
-    }
-
-    async handleDeleteRecord(id) {
-        try {
-            const confirmed = await this.confirmAction('确定要删除这条记录吗？此操作不可恢复。');
-            if (!confirmed) return;
-
-            const apiManager = this.getComponent('api');
-            if (apiManager) {
-                await apiManager.deleteRecord(id);
-                this.showToast('记录删除成功', 'success');
-                
-                // 刷新数据
-                const libraryManager = this.getComponent('library');
-                if (libraryManager && libraryManager.loadData) {
-                    await libraryManager.loadData();
-                }
-                
-                this.emit('record:deleted', { id });
+            if (bilingualOriginal && result.original_html) {
+                bilingualOriginal.srcdoc = result.original_html;
             }
-        } catch (error) {
-            console.error('删除记录失败:', error);
-            this.showToast('删除记录失败', 'error');
         }
-    }
 
-    handleSelectAllRecords(checked) {
-        const checkboxes = document.querySelectorAll('.row-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = checked;
-        });
-        
-        this.emit('records:selected', { selectAll: checked });
+        // 显示当前模式的内容
+        this.showCurrentMode();
     }
-
-    handleSelectRecord(id, checked) {
-        this.emit('record:selected', { id, checked });
-    }
-
-    handleSwitchTheme(themeName) {
-        const themeManager = this.getComponent('theme');
-        if (themeManager) {
-            themeManager.setTheme(themeName);
-        }
-    }
-
-    handleToggleTheme() {
-        const themeManager = this.getComponent('theme');
-        if (themeManager) {
-            themeManager.toggleTheme();
-        }
-    }
-
-    async handleTranslateUrl(url, targetLang = 'zh') {
-        try {
-            const apiManager = this.getComponent('api');
-            if (apiManager) {
-                this.showToast('开始翻译...', 'info');
-                const result = await apiManager.translatePage(url, targetLang);
-                this.showToast('翻译完成', 'success');
-                return result;
-            }
-        } catch (error) {
-            console.error('翻译失败:', error);
-            this.showToast('翻译失败', 'error');
-        }
-    }
-
-    // ==============================================
-    // 工具方法
-    // ==============================================
 
     /**
-     * 显示提示消息
-     * @param {string} message - 消息内容
-     * @param {string} type - 消息类型
+     * 切换显示模式
      */
-    showToast(message, type = 'info') {
-        // 移除现有提示
-        const existingToasts = document.querySelectorAll('.toast');
-        existingToasts.forEach(toast => toast.remove());
+    switchMode(mode) {
+        this.currentMode = mode;
+        
+        // 更新按钮状态
+        this.elements.modeButtons?.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
 
-        // 创建新提示
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}-toast`;
-        toast.textContent = message;
-        toast.style.cssText = `
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            padding: 12px 16px;
-            border-radius: 8px;
-            color: white;
-            font-weight: 500;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10000;
-            max-width: 300px;
-            animation: slideIn 0.3s ease;
-        `;
+        // 显示对应内容
+        this.showCurrentMode();
+    }
 
-        // 设置背景色
-        const colors = {
-            success: '#28a745',
-            error: '#dc3545',
-            warning: '#ffc107',
-            info: '#17a2b8'
-        };
-        toast.style.background = colors[type] || colors.info;
+    /**
+     * 显示当前模式的内容
+     */
+    showCurrentMode() {
+        // 隐藏所有内容
+        Object.values(this.elements.contentFrames).forEach(frame => {
+            if (frame) {
+                frame.classList.remove('active');
+                frame.style.display = 'none';
+            }
+        });
 
-        document.body.appendChild(toast);
+        // 显示当前模式的内容
+        const currentFrame = this.elements.contentFrames[this.currentMode];
+        if (currentFrame) {
+            currentFrame.classList.add('active');
+            currentFrame.style.display = this.currentMode === 'bilingual' ? 'flex' : 'block';
+        }
+    }
 
-        // 自动移除
+    /**
+     * 切换导航栏显示
+     */
+    toggleNavbar() {
+        const isHidden = this.elements.navbar?.classList.contains('hidden');
+        
+        if (isHidden) {
+            this.elements.navbar?.classList.remove('hidden');
+            this.elements.floatingToggle?.classList.remove('show');
+        } else {
+            this.elements.navbar?.classList.add('hidden');
+            this.elements.floatingToggle?.classList.add('show');
+        }
+    }
+
+    /**
+     * 设置处理状态
+     */
+    setProcessing(processing) {
+        this.isProcessing = processing;
+        if (this.elements.translateBtn) {
+            this.elements.translateBtn.disabled = processing;
+            this.elements.translateBtn.textContent = processing ? '处理中...' : '翻译';
+        }
+    }
+
+    /**
+     * 显示/隐藏内容
+     */
+    hideContent() {
+        Object.values(this.elements.contentFrames).forEach(frame => {
+            if (frame) {
+                frame.style.display = 'none';
+            }
+        });
+    }
+
+    showLoading() {
+        this.elements.loading?.classList.add('active');
+        this.elements.emptyState?.classList.add('hidden');
+    }
+
+    hideLoading() {
+        this.elements.loading?.classList.remove('active');
+    }
+
+    /**
+     * 显示消息
+     */
+    showError(message) {
+        this.showToast(this.elements.errorToast, message);
+    }
+
+    showSuccess(message) {
+        this.showToast(this.elements.successToast, message);
+    }
+
+    showToast(element, message) {
+        if (!element) return;
+        
+        element.textContent = message;
+        element.classList.add('show');
+        
         setTimeout(() => {
-            if (toast.parentNode) {
-                toast.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => toast.remove(), 300);
-            }
+            element.classList.remove('show');
         }, 3000);
-
-        // 点击关闭
-        toast.addEventListener('click', () => toast.remove());
     }
 
     /**
-     * 确认对话框
-     * @param {string} message - 确认消息
-     * @returns {Promise<boolean>} 用户确认结果
+     * 加载设置
      */
-    confirmAction(message) {
-        return new Promise((resolve) => {
-            const result = confirm(message);
-            resolve(result);
-        });
-    }
-
-    /**
-     * 显示帮助信息
-     */
-    showHelp() {
-        const helpText = `
-Monolith 网页翻译器 - 快捷键说明:
-
-Ctrl/Cmd + K  - 快速搜索
-Ctrl/Cmd + /  - 显示帮助
-Ctrl/Cmd + Shift + T - 切换主题
-ESC - 关闭模态框
-
-更多功能请查看用户文档。
-        `;
-        
-        alert(helpText);
-    }
-
-    /**
-     * 关闭所有模态框
-     */
-    closeModals() {
-        const modals = document.querySelectorAll('.modal, .dialog, .popup');
-        modals.forEach(modal => {
-            if (modal.style.display !== 'none') {
-                modal.style.display = 'none';
-            }
-        });
-    }
-
-    /**
-     * 验证URL格式
-     * @param {string} url - URL字符串
-     * @returns {boolean} 是否为有效URL
-     */
-    isValidUrl(url) {
+    loadSettings() {
         try {
-            new URL(url);
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    // ==============================================
-    // 事件系统
-    // ==============================================
-
-    /**
-     * 触发事件
-     * @param {string} eventName - 事件名称
-     * @param {Object} data - 事件数据
-     */
-    emit(eventName, data = {}) {
-        const event = new CustomEvent(eventName, { detail: data });
-        this.eventBus.dispatchEvent(event);
-        
-        if (this.config.debug) {
-            console.log(`事件触发: ${eventName}`, data);
-        }
-    }
-
-    /**
-     * 监听事件
-     * @param {string} eventName - 事件名称
-     * @param {Function} callback - 回调函数
-     */
-    on(eventName, callback) {
-        this.eventBus.addEventListener(eventName, callback);
-    }
-
-    /**
-     * 移除事件监听
-     * @param {string} eventName - 事件名称
-     * @param {Function} callback - 回调函数
-     */
-    off(eventName, callback) {
-        this.eventBus.removeEventListener(eventName, callback);
-    }
-
-    // ==============================================
-    // 生命周期管理
-    // ==============================================
-
-    /**
-     * 清理资源
-     */
-    cleanup() {
-        console.log('开始清理应用资源...');
-        
-        // 清理各个组件
-        this.components.forEach((component, name) => {
-            if (component.destroy) {
-                try {
-                    component.destroy();
-                    console.log(`组件清理完成: ${name}`);
-                } catch (error) {
-                    console.error(`组件清理失败: ${name}`, error);
-                }
+            const savedTheme = localStorage.getItem('monolith-theme') || 'light';
+            document.body.className = `theme-${savedTheme}`;
+            
+            const themeSelect = document.getElementById('theme-select');
+            if (themeSelect) {
+                themeSelect.value = savedTheme;
             }
-        });
-
-        // 清理事件监听
-        this.eventBus.removeEventListener();
-        
-        this.emit('app:cleanup');
-        console.log('应用资源清理完成');
-    }
-
-    /**
-     * 重启应用
-     */
-    async restart() {
-        console.log('重启应用...');
-        this.cleanup();
-        this.initialized = false;
-        await this.init(this.config);
-    }
-
-    /**
-     * 获取应用状态
-     * @returns {Object} 应用状态信息
-     */
-    getStatus() {
-        return {
-            initialized: this.initialized,
-            componentCount: this.components.size,
-            config: { ...this.config },
-            components: Array.from(this.components.keys())
-        };
-    }
-}
-
-// 创建全局应用实例
-window.appManager = new AppManager();
-
-// 导出给其他模块使用
-window.AppManager = AppManager;
-
-// 自动初始化（如果DOM已加载）
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        if (window.appManager && !window.appManager.initialized) {
-            window.appManager.init();
+        } catch (error) {
+            console.warn('加载设置失败:', error);
         }
-    });
-} else {
-    // DOM已经加载完成
-    if (window.appManager && !window.appManager.initialized) {
-        window.appManager.init();
     }
 }
+
+// 当DOM加载完成时初始化应用
+document.addEventListener('DOMContentLoaded', () => {
+    window.monolithApp = new MonolithApp();
+    console.log('🚀 Monolith 应用已初始化');
+});
