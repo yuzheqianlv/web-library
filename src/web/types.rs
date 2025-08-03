@@ -10,6 +10,8 @@ use mongodb::{Client as MongoClient, Collection, Database};
 #[cfg(feature = "web")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedHtml {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<mongodb::bson::oid::ObjectId>,
     pub url: String,
     pub original_html: String,
     pub translated_html: String,

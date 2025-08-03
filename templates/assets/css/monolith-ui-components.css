@@ -1,0 +1,801 @@
+/**
+ * Monolith智能链接拦截器UI组件样式
+ * 
+ * 包含：
+ * - 状态指示器
+ * - 加载动画
+ * - 用户反馈组件
+ * - 交互元素
+ * - 响应式设计
+ * 
+ * @version 1.0.0
+ * @author Monolith Team
+ */
+
+/* ============================================
+   基础样式和CSS变量
+   ============================================ */
+
+:root {
+    /* 主题颜色 */
+    --monolith-primary: #2196f3;
+    --monolith-success: #4caf50;
+    --monolith-warning: #ff9800;
+    --monolith-error: #f44336;
+    --monolith-info: #00bcd4;
+    --monolith-processing: #9c27b0;
+    
+    /* 状态颜色 */
+    --monolith-cached: #4caf50;
+    --monolith-processing: #2196f3;
+    --monolith-expired: #ff5722;
+    --monolith-failed: #f44336;
+    --monolith-unknown: #9e9e9e;
+    --monolith-checking: #ff9800;
+    
+    /* 尺寸 */
+    --monolith-border-radius: 6px;
+    --monolith-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    --monolith-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.2);
+    
+    /* 动画 */
+    --monolith-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --monolith-animation-duration: 0.3s;
+    --monolith-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ============================================
+   链接状态指示器
+   ============================================ */
+
+/* 链接基础样式增强 */
+a[data-monolith-processed] {
+    position: relative;
+    transition: var(--monolith-transition);
+}
+
+a[data-monolith-processed]:hover {
+    transform: translateY(-1px);
+}
+
+/* 状态指示器 */
+.monolith-status-indicator {
+    display: inline-block !important;
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 50% !important;
+    margin-left: 6px !important;
+    margin-right: 2px !important;
+    transition: var(--monolith-transition) !important;
+    opacity: 0.8 !important;
+    vertical-align: middle !important;
+    position: relative !important;
+    top: -1px !important;
+}
+
+.monolith-status-indicator::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: inherit;
+    transform: translate(-50%, -50%);
+    transition: var(--monolith-transition);
+}
+
+/* 状态指示器动画效果 */
+.monolith-status-indicator.animate-pulse::after {
+    animation: monolith-pulse-ring 2s infinite;
+}
+
+.monolith-status-indicator.animate-spin {
+    animation: monolith-spin 1s linear infinite;
+}
+
+.monolith-status-indicator.animate-bounce {
+    animation: monolith-bounce 0.5s ease;
+}
+
+/* 状态指示器颜色类 */
+.monolith-status-indicator.monolith-status-unknown {
+    background-color: var(--monolith-unknown) !important;
+}
+
+.monolith-status-indicator.monolith-status-checking {
+    background-color: var(--monolith-checking) !important;
+}
+
+.monolith-status-indicator.monolith-status-cached {
+    background-color: var(--monolith-cached) !important;
+}
+
+.monolith-status-indicator.monolith-status-processing {
+    background-color: var(--monolith-processing) !important;
+}
+
+.monolith-status-indicator.monolith-status-expired {
+    background-color: var(--monolith-expired) !important;
+}
+
+.monolith-status-indicator.monolith-status-failed {
+    background-color: var(--monolith-failed) !important;
+}
+
+.monolith-status-indicator.monolith-status-error {
+    background-color: var(--monolith-error) !important;
+}
+
+/* 链接状态样式 */
+a.monolith-cached {
+    border-left: 3px solid var(--monolith-cached) !important;
+    padding-left: 6px !important;
+    background: linear-gradient(90deg, rgba(76, 175, 80, 0.1) 0%, transparent 100%) !important;
+}
+
+a.monolith-processing {
+    border-left: 3px solid var(--monolith-processing) !important;
+    padding-left: 6px !important;
+    background: linear-gradient(90deg, rgba(33, 150, 243, 0.1) 0%, transparent 100%) !important;
+    animation: monolith-processing-pulse 2s infinite;
+}
+
+a.monolith-expired {
+    border-left: 3px solid var(--monolith-expired) !important;
+    padding-left: 6px !important;
+    background: linear-gradient(90deg, rgba(255, 87, 34, 0.1) 0%, transparent 100%) !important;
+}
+
+a.monolith-failed {
+    border-left: 3px solid var(--monolith-failed) !important;
+    padding-left: 6px !important;
+    background: linear-gradient(90deg, rgba(244, 67, 54, 0.1) 0%, transparent 100%) !important;
+}
+
+a.monolith-checking {
+    border-left: 3px solid var(--monolith-checking) !important;
+    padding-left: 6px !important;
+    background: linear-gradient(90deg, rgba(255, 152, 0, 0.1) 0%, transparent 100%) !important;
+    animation: monolith-checking-shimmer 1.5s infinite;
+}
+
+/* 悬停增强效果 */
+a[data-monolith-processed]:hover .monolith-status-indicator {
+    transform: scale(1.3);
+    opacity: 1;
+}
+
+a.monolith-cached:hover {
+    box-shadow: inset 4px 0 0 var(--monolith-cached), var(--monolith-shadow-hover);
+}
+
+/* ============================================
+   加载动画
+   ============================================ */
+
+/* 旋转动画 */
+@keyframes monolith-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 脉冲环形动画 */
+@keyframes monolith-pulse-ring {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 1;
+    }
+    100% {
+        width: 20px;
+        height: 20px;
+        opacity: 0;
+    }
+}
+
+/* 处理中脉冲动画 */
+@keyframes monolith-processing-pulse {
+    0%, 100% { 
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.1) 0%, transparent 100%);
+    }
+    50% { 
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.2) 0%, transparent 100%);
+    }
+}
+
+/* 检查中闪烁动画 */
+@keyframes monolith-checking-shimmer {
+    0% { 
+        background: linear-gradient(90deg, rgba(255, 152, 0, 0.1) 0%, transparent 100%);
+        opacity: 0.7;
+    }
+    50% { 
+        background: linear-gradient(90deg, rgba(255, 152, 0, 0.3) 0%, transparent 100%);
+        opacity: 1;
+    }
+    100% { 
+        background: linear-gradient(90deg, rgba(255, 152, 0, 0.1) 0%, transparent 100%);
+        opacity: 0.7;
+    }
+}
+
+/* 弹跳动画 */
+@keyframes monolith-bounce {
+    0%, 20%, 53%, 80%, 100% {
+        transform: translate3d(0, 0, 0);
+    }
+    40%, 43% {
+        transform: translate3d(0, -8px, 0);
+    }
+    70% {
+        transform: translate3d(0, -4px, 0);
+    }
+    90% {
+        transform: translate3d(0, -2px, 0);
+    }
+}
+
+/* 滑入动画 */
+@keyframes monolith-slide-in {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 淡入动画 */
+@keyframes monolith-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   状态面板
+   ============================================ */
+
+.monolith-status-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 12px 16px;
+    border-radius: var(--monolith-border-radius);
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    z-index: 9999;
+    box-shadow: var(--monolith-shadow);
+    transition: var(--monolith-transition);
+    backdrop-filter: blur(8px);
+    min-width: 200px;
+}
+
+.monolith-status-panel:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: translateY(-2px);
+    box-shadow: var(--monolith-shadow-hover);
+}
+
+.monolith-status-panel.hidden {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+}
+
+.monolith-status-panel .panel-header {
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.monolith-status-panel .panel-content {
+    line-height: 1.4;
+}
+
+.monolith-status-panel .status-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.monolith-status-panel .status-summary {
+    font-size: 10px;
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.monolith-status-panel .status-summary > span {
+    white-space: nowrap;
+}
+
+.monolith-status-panel .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    margin: 8px 0;
+    overflow: hidden;
+}
+
+.monolith-status-panel .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--monolith-primary), var(--monolith-success));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    animation: monolith-progress-shine 2s infinite;
+}
+
+@keyframes monolith-progress-shine {
+    0% { background-position: -100% 0; }
+    100% { background-position: 100% 0; }
+}
+
+/* ============================================
+   提示工具
+   ============================================ */
+
+.monolith-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: var(--monolith-border-radius);
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    white-space: nowrap;
+    z-index: 10000;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: var(--monolith-transition);
+    box-shadow: var(--monolith-shadow);
+}
+
+.monolith-tooltip.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.monolith-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.9);
+}
+
+/* 增强工具提示样式 */
+.monolith-tooltip .tooltip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.monolith-tooltip .status-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-weight: 500;
+}
+
+.monolith-tooltip .status-badge.status-cached {
+    background: var(--monolith-cached);
+}
+
+.monolith-tooltip .status-badge.status-processing {
+    background: var(--monolith-processing);
+}
+
+.monolith-tooltip .status-badge.status-checking {
+    background: var(--monolith-checking);
+}
+
+.monolith-tooltip .status-badge.status-expired {
+    background: var(--monolith-expired);
+}
+
+.monolith-tooltip .status-badge.status-failed {
+    background: var(--monolith-failed);
+}
+
+.monolith-tooltip .status-badge.status-error {
+    background: var(--monolith-error);
+}
+
+.monolith-tooltip .tooltip-body {
+    font-size: 11px;
+    line-height: 1.4;
+    margin-bottom: 6px;
+}
+
+.monolith-tooltip .tooltip-action {
+    font-size: 11px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffd700;
+}
+
+/* 链接悬停增强 */
+.monolith-link-hover {
+    background: linear-gradient(90deg, rgba(33, 150, 243, 0.05) 0%, transparent 100%) !important;
+    transform: translateX(2px);
+    transition: var(--monolith-transition);
+}
+
+/* ============================================
+   选择对话框
+   ============================================ */
+
+.monolith-choice-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+}
+
+.monolith-dialog-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: monolith-fade-in 0.3s ease;
+    backdrop-filter: blur(4px);
+}
+
+.monolith-dialog-content {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    animation: monolith-bounce 0.5s ease;
+    position: relative;
+}
+
+.monolith-dialog-content h3 {
+    margin: 0 0 16px 0;
+    color: #333;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.monolith-dialog-content p {
+    color: #666;
+    line-height: 1.5;
+    margin: 0 0 20px 0;
+}
+
+.monolith-dialog-content code {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    word-break: break-all;
+    color: #e91e63;
+}
+
+.monolith-dialog-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+.monolith-dialog-actions button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--monolith-border-radius);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: var(--monolith-transition);
+    min-width: 80px;
+}
+
+.monolith-dialog-actions .btn-primary {
+    background: var(--monolith-primary);
+    color: white;
+}
+
+.monolith-dialog-actions .btn-success {
+    background: var(--monolith-success);
+    color: white;
+}
+
+.monolith-dialog-actions .btn-warning {
+    background: var(--monolith-warning);
+    color: white;
+}
+
+.monolith-dialog-actions .btn-secondary {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.monolith-dialog-actions button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--monolith-shadow);
+}
+
+.monolith-dialog-actions button:active {
+    transform: translateY(0);
+}
+
+/* ============================================
+   通知系统
+   ============================================ */
+
+.monolith-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    padding: 16px 20px;
+    border-radius: var(--monolith-border-radius);
+    box-shadow: var(--monolith-shadow);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    z-index: 10000;
+    max-width: 350px;
+    animation: monolith-slide-in 0.3s ease;
+    border-left: 4px solid var(--monolith-info);
+}
+
+.monolith-notification.success {
+    border-left-color: var(--monolith-success);
+}
+
+.monolith-notification.warning {
+    border-left-color: var(--monolith-warning);
+}
+
+.monolith-notification.error {
+    border-left-color: var(--monolith-error);
+}
+
+.monolith-notification .notification-header {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.monolith-notification .notification-body {
+    color: #666;
+    line-height: 1.4;
+}
+
+.monolith-notification .notification-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #999;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: var(--monolith-transition);
+}
+
+.monolith-notification .notification-close:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.monolith-notification.slide-out {
+    animation: monolith-slide-out 0.3s ease forwards;
+}
+
+@keyframes monolith-slide-out {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* ============================================
+   加载指示器
+   ============================================ */
+
+.monolith-loader {
+    display: inline-block;
+    position: relative;
+    width: 20px;
+    height: 20px;
+}
+
+.monolith-loader-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: currentColor;
+    animation: monolith-spin 1s linear infinite;
+}
+
+.monolith-loader-dots {
+    display: flex;
+    gap: 3px;
+}
+
+.monolith-loader-dots div {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: monolith-dots-pulse 1.4s infinite ease-in-out both;
+}
+
+.monolith-loader-dots div:nth-child(1) { animation-delay: -0.32s; }
+.monolith-loader-dots div:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes monolith-dots-pulse {
+    0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   响应式设计
+   ============================================ */
+
+@media (max-width: 768px) {
+    .monolith-status-panel {
+        bottom: 10px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+        font-size: 11px;
+        padding: 10px 12px;
+    }
+    
+    .monolith-dialog-content {
+        margin: 20px;
+        padding: 20px;
+        width: auto;
+        max-width: none;
+    }
+    
+    .monolith-notification {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+    
+    .monolith-dialog-actions {
+        flex-direction: column;
+    }
+    
+    .monolith-dialog-actions button {
+        width: 100%;
+        margin: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .monolith-status-indicator {
+        width: 6px !important;
+        height: 6px !important;
+        margin-left: 4px !important;
+    }
+    
+    a[data-monolith-processed] {
+        padding-left: 4px !important;
+    }
+    
+    .monolith-tooltip {
+        font-size: 11px;
+        padding: 6px 8px;
+    }
+}
+
+/* ============================================
+   深色模式支持
+   ============================================ */
+
+@media (prefers-color-scheme: dark) {
+    .monolith-dialog-content {
+        background: #2d2d2d;
+        color: #fff;
+    }
+    
+    .monolith-dialog-content h3 {
+        color: #fff;
+    }
+    
+    .monolith-dialog-content p {
+        color: #ccc;
+    }
+    
+    .monolith-dialog-content code {
+        background: #3d3d3d;
+        color: #ff9800;
+    }
+    
+    .monolith-dialog-actions .btn-secondary {
+        background: #404040;
+        color: #fff;
+    }
+    
+    .monolith-notification {
+        background: #2d2d2d;
+        color: #fff;
+    }
+    
+    .monolith-notification .notification-body {
+        color: #ccc;
+    }
+}
+
+/* ============================================
+   动画性能优化
+   ============================================ */
+
+.monolith-no-animations *,
+.monolith-no-animations *::before,
+.monolith-no-animations *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+}
+
+/* 减少动效的设置 */
+@media (prefers-reduced-motion: reduce) {
+    .monolith-status-indicator,
+    .monolith-dialog-content,
+    .monolith-notification,
+    a[data-monolith-processed] {
+        animation: none;
+        transition: none;
+    }
+}

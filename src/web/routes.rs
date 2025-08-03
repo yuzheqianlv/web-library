@@ -30,6 +30,8 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/library-debug", get(library_debug_page))
         .route("/bookmarklet", get(bookmarklet_page))
         .route("/website/*url", get(website_bookmarklet))
+        // 智能路由
+        .route("/smart-website/*url", get(smart_website_handler))
         // API 路由
         .route("/api/translate", post(translate_url))
         .route("/api/content", post(get_content))
@@ -37,6 +39,14 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/api/cache/clear", post(clear_cache))
         .route("/api/cache/cleanup", post(cleanup_cache))
         .route("/api/bookmarklet", get(generate_bookmarklet))
+        // 链接状态API (V2)
+        .route("/api/v2/link-status", get(check_link_status))
+        .route("/api/v2/link-status/batch", post(check_batch_link_status))
+        .route("/api/v2/domain-links", get(get_domain_links))
+        // 智能拦截器API
+        .route("/api/v2/interceptor/script", get(get_interceptor_script))
+        .route("/api/v2/interceptor/injection", get(get_interceptor_injection_script))
+        .route("/api/v2/interceptor/bookmarklet", get(get_enhanced_bookmarklet_script))
         // Library API 路由 (V1 - Legacy)
         .route("/api/library", get(lib_handlers::get_library_data))
         .route("/api/library/stats", get(lib_handlers::get_library_stats))

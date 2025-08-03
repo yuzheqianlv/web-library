@@ -175,6 +175,7 @@ impl LibraryServiceV2 {
         let now = chrono::Utc::now();
 
         let processing_record = CachedHtml {
+            id: None, // 由MongoDB自动生成
             url: url.to_string(),
             title: Some("处理中...".to_string()),
             original_html: "".to_string(),

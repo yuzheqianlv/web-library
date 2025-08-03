@@ -6,6 +6,7 @@ pub mod config;
 pub mod handlers;
 pub mod library;
 pub mod routes;
+pub mod services;
 pub mod templates;
 pub mod theme;
 pub mod types;

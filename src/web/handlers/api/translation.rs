@@ -274,6 +274,7 @@ pub async fn translate_url(
         };
 
         let cached_html = CachedHtml {
+            id: None, // 由MongoDB自动生成
             url: request.url.clone(),
             original_html: original_html.clone(),
             translated_html: translated_html.clone(),

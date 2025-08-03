@@ -11,10 +11,19 @@ Monolith is a Rust library and CLI tool for saving web pages as single HTML file
 ### Core Components
 
 - **Core Processing**: `src/core.rs` - Main document processing logic with `create_monolithic_document()` and `create_monolithic_document_from_data()`
+- **Environment Management**: `src/env.rs` - Type-safe environment variable system with validation
 - **Network Layer**: `src/network/` - HTTP client, caching, session management, and cookie handling
 - **Parsers**: `src/parsers/` - HTML (html5ever), CSS, JavaScript, and link rewriting
+  - `src/parsers/html/` - Comprehensive HTML processing with DOM manipulation
+  - `src/parsers/link_rewriter.rs` - URL rewriting and resource embedding
 - **Translation System**: `src/translation/` - Optional translation pipeline with external API integration
+  - `src/translation/core/` - Translation engine and service layer
+  - `src/translation/pipeline/` - Text processing pipeline (collection, filtering, batching)
+  - `src/translation/storage/` - Multi-level caching system
 - **Web Server**: `src/web/` - Optional Axum-based web interface with REST API
+  - `src/web/handlers/` - HTTP request handlers and API endpoints
+  - `src/web/library/` - Document library management
+- **Builders**: `src/builders/` - Output format builders (web feature only)
 
 ### Execution Modes
 
@@ -49,8 +58,24 @@ cargo build --features="translation"
 
 ### Testing
 ```bash
+# Run all tests
 make test
 cargo test --locked
+
+# Run tests for specific features
+cargo test --features="translation" --locked
+cargo test --features="web" --locked
+
+# Run specific test modules
+cargo test cli:: --locked
+cargo test core:: --locked
+cargo test translation:: --locked
+
+# Run integration tests
+cargo test --test integration --locked
+
+# Run tests with test output
+cargo test --locked -- --nocapture
 ```
 
 ### Code Quality
@@ -63,9 +88,19 @@ cargo fmt --all
 make lint
 cargo clippy --fix --allow-dirty --allow-staged
 
-# Check formatting and linting
+# Check formatting and linting (CI-style checks)
 make format-check
 make lint-check
+
+# Install and uninstall
+make install
+make uninstall
+
+# Clean build artifacts
+make clean
+
+# Update dependencies
+make update-lock-file
 ```
 
 ### Running Applications
@@ -127,9 +162,25 @@ The web server provides:
 
 ## Testing Structure
 
-- Unit tests: Inline `#[cfg(test)]` modules
-- Integration tests: `tests/` directory with realistic test data in `tests/_data_/`
-- Test different features with appropriate flags
+### Test Organization
+- **Unit tests**: Inline `#[cfg(test)]` modules in source files
+- **Integration tests**: `tests/` directory organized by functionality
+- **Test data**: `tests/_data_/` contains realistic HTML, CSS, and JS test files
+- **Feature-specific tests**: Use appropriate feature flags for testing optional functionality
+
+### Test Data Categories
+- `tests/_data_/basic/` - Basic HTML and resource files
+- `tests/_data_/css/` - CSS parsing and embedding tests
+- `tests/_data_/unusual_encodings/` - Character encoding tests (GB2312, ISO-8859-1)
+- `tests/_data_/svg/` - SVG and vector graphics tests
+- `tests/_data_/integrity/` - Resource integrity verification tests
+
+### Test Modules
+- `tests/cli/` - Command-line interface functionality
+- `tests/core/` - Core processing logic tests
+- `tests/html/` - HTML parsing and manipulation tests
+- `tests/translation_pipeline.rs` - End-to-end translation functionality
+- `tests/integration/translation/` - Translation system integration tests
 
 ## Error Handling
 
@@ -140,11 +191,41 @@ The codebase uses custom error types:
 
 ## Code Style
 
-- Uses rustfmt with configuration in `rustfmt.toml`
+- Uses rustfmt with configuration in `rustfmt.toml` (max_width=100, tab_spaces=4)
 - Extensive documentation comments for public APIs
 - Conditional compilation with `#[cfg(feature = "...")]`
 - Follows standard Rust naming conventions
+- Chinese comments preferred (使用中文编写注释)
 
-## Code Comments
+## Project Structure
 
-- 使用中文编写注释
+### Binary Targets
+- `monolith` (CLI): Requires `cli` feature, entry point at `src/main.rs`
+- `monolith-web` (Web server): Requires `web` feature, entry point at `src/web_main.rs`
+
+### Environment Configuration
+- `cargo/config.toml` - Cargo build configuration (OPENSSL_NO_VENDOR=1)
+- `rustfmt.toml` - Code formatting rules
+- `Makefile` - Development automation scripts
+
+### Important Files
+- `src/CLAUDE.md` - Rust coding standards and project guidelines
+- `src/translation_legacy.rs` - Legacy translation support for backward compatibility
+
+## Development Environment
+
+### Prerequisites
+- Rust 1.70+ (edition 2021)
+- For web features: MongoDB (optional, for persistent storage)
+- For translation features: External translation API access
+
+### Environment Variables
+The project supports extensive environment configuration through `src/env.rs`:
+- Translation API keys and endpoints
+- Web server configuration (host, port, theme)
+- Cache settings and timeouts
+- Debug and logging options
+
+### OpenSSL Configuration
+- Uses system OpenSSL by default (`OPENSSL_NO_VENDOR=1`)
+- Use `vendored-openssl` feature for static linking when needed
