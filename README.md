@@ -29,9 +29,7 @@
 ### 从源码构建
 
 ```bash
-# 克隆项目
-git clone https://github.com/Y2Z/monolith.git
-cd monolith
+
 
 # 基础 CLI 工具
 cargo build --release --features="cli"
