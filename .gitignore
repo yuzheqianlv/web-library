@@ -19,7 +19,7 @@ Thumbs.db
 
 # Environment and configuration
 .env
-.env.local
+.env.*
 .env.*.local
 config.toml
 *.key
@@ -49,7 +49,7 @@ coverage/
 # OS generated files
 .DS_Store
 .DS_Store?
-._*
+
 .Spotlight-V100
 .Trashes
 ehthumbs.db
@@ -69,7 +69,7 @@ Thumbs.db
 *.rar
 
 # Added by Apify CLI
-storage
+
 node_modules
 .venv
 
