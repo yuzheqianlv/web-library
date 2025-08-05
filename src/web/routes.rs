@@ -24,6 +24,7 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/api/bookmarklet", get(generate_bookmarklet))
         // 基础管理功能
         .route("/api/cache/clear", post(clear_cache))
+        .route("/api/cache/stats", get(get_cache_stats))
         // 向后兼容的API别名（已弃用，建议使用/api/process）
         .route("/api/translate", post(translate_url_deprecated))
         .route("/api/content", post(get_content_deprecated))

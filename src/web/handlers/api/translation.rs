@@ -27,83 +27,14 @@ pub async fn translate_url(
         .target_lang
         .clone()
         .unwrap_or_else(|| "zh".to_string());
-    let source_lang = request
+    let _source_lang = request
         .source_lang
         .clone()
         .unwrap_or_else(|| "auto".to_string());
 
-    // 检查URL是否已存在或正在处理中
-    if let Some(ref collection) = state.mongo_collection {
-        use mongodb::bson::doc;
-        use crate::web::library::v2_service::LibraryServiceV2;
-        
-        let library_service = LibraryServiceV2::new(state.mongo_database.as_ref().unwrap().clone());
-        
-        // 首先检查是否已有完成的缓存（优先级最高）
-        let success_filter = doc! {
-            "url": &url,
-            "source_lang": &source_lang,
-            "target_lang": &target_lang,
-            "status": "success"
-        };
-
-        if let Ok(Some(cached)) = collection.find_one(success_filter).await {
-            tracing::info!("从缓存返回已完成的翻译结果: {}", url);
-            let response = TranslateResponse {
-                original_html: cached.original_html,
-                translated_html: cached.translated_html,
-                title: cached.title,
-                url: cached.url,
-            };
-            return Ok(Json(response));
-        }
-
-        // 检查是否正在处理
-        match library_service.is_url_processing(&url, &source_lang, &target_lang).await {
-            Ok(true) => {
-                tracing::warn!("URL正在处理中，请稍后再试: {}", url);
-                return Err((
-                    axum::http::StatusCode::TOO_MANY_REQUESTS,
-                    Json(serde_json::json!({
-                        "error": "URL正在处理中，请稍后再试",
-                        "url": url,
-                        "status": "processing",
-                        "message": "页面正在翻译处理中，请稍等片刻后刷新"
-                    }))
-                ));
-            }
-            Ok(false) => {
-                // URL不在处理中，可以开始新的处理
-                tracing::info!("URL未在处理中，准备开始新的翻译处理: {}", url);
-            }
-            Err(e) => {
-                tracing::error!("检查URL状态失败: {}", e);
-                // 继续处理，不因为数据库错误阻塞请求
-            }
-        }
-        
-        // 标记URL为处理中
-        match library_service.mark_url_processing(&url, &source_lang, &target_lang).await {
-            Ok(_) => {
-                tracing::info!("标记URL为处理中: {}", url);
-            }
-            Err(e) if e.contains("正在处理中") => {
-                tracing::warn!("URL已在处理中，拒绝重复请求: {}", url);
-                return Err((
-                    axum::http::StatusCode::TOO_MANY_REQUESTS,
-                    Json(serde_json::json!({
-                        "error": "URL正在处理中，请稍后再试",
-                        "url": url,
-                        "status": "processing"
-                    }))
-                ));
-            }
-            Err(e) => {
-                tracing::error!("标记URL处理状态失败: {}", e);
-                // 继续处理，不因为数据库错误阻塞请求
-            }
-        }
-    }
+    // 轻量化版本：移除MongoDB依赖，使用内存缓存
+    // TODO: 实现基于内存的缓存和重复请求检测机制
+    tracing::info!("轻量化模式：直接处理翻译请求，无持久化缓存");
 
     // 克隆选项用于并行处理
     let options_original = state.monolith_options.clone();
@@ -122,7 +53,7 @@ pub async fn translate_url(
     let translated_future = {
         let url = url.clone();
         let options = options_translated;
-        let target_lang_clone = target_lang.clone();
+        let _target_lang_clone = target_lang.clone();
         task::spawn_blocking(
             move || -> Result<(Vec<u8>, Option<String>), MonolithError> {
                 // 先获取原始内容
@@ -136,16 +67,16 @@ pub async fn translate_url(
                     use crate::translation::{load_translation_config, translate_dom_content};
 
                     let (original_data, title) = original_result;
-                    let dom = html_to_dom(&original_data, url);
+                    let dom = html_to_dom(&original_data, url.clone());
 
                     // 加载翻译配置，从配置文件加载 API URL
-                    let translation_config = load_translation_config(&target_lang_clone, None);
+                    let translation_config = load_translation_config(&_target_lang_clone, None);
 
                     // 翻译需要在异步上下文中运行，这里简化处理
                     let translated_dom = tokio::runtime::Handle::current()
                         .block_on(translate_dom_content(
                             dom,
-                            &target_lang_clone,
+                            &_target_lang_clone,
                             Some(&translation_config.api_url),
                         ))
                         .map_err(|e| MonolithError::new(&format!("Translation error: {}", e)))?;
@@ -179,19 +110,7 @@ pub async fn translate_url(
     let (original_data, original_title) = match original_result {
         Ok(result) => result,
         Err(e) => {
-            // 处理失败，清理处理状态
-            if let Some(ref collection) = state.mongo_collection {
-                use mongodb::bson::doc;
-                let filter = doc! {
-                    "url": &url,
-                    "source_lang": &source_lang,
-                    "target_lang": &target_lang,
-                    "status": "pending"
-                };
-                let _ = collection.delete_one(filter).await;
-                tracing::error!("原文处理失败，已清理处理状态: {}", url);
-            }
-            
+            tracing::error!("原文处理失败: {}", e);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -205,19 +124,7 @@ pub async fn translate_url(
     let (translated_data, translated_title) = match translated_result {
         Ok(result) => result,
         Err(e) => {
-            // 翻译处理失败，清理处理状态
-            if let Some(ref collection) = state.mongo_collection {
-                use mongodb::bson::doc;
-                let filter = doc! {
-                    "url": &url,
-                    "source_lang": &source_lang,
-                    "target_lang": &target_lang,
-                    "status": "pending"
-                };
-                let _ = collection.delete_one(filter).await;
-                tracing::error!("翻译处理失败，已清理处理状态: {}", url);
-            }
-            
+            tracing::error!("翻译处理失败: {}", e);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -250,61 +157,21 @@ pub async fn translate_url(
                 translated_html = rewritten_html;
             } else {
                 // 如果链接重写失败，记录错误但继续使用原始HTML
-                eprintln!("警告: 链接重写失败，使用原始翻译结果");
+                tracing::warn!("链接重写失败，使用原始翻译结果");
             }
         }
+    }
+    
+    #[cfg(not(feature = "translation"))]
+    {
+        // 轻量化版本：不进行链接重写
     }
 
     // 使用标题
     let title = translated_title.or(original_title);
 
-    // 缓存结果到MongoDB并更新处理状态
-    if let Some(ref collection) = state.mongo_collection {
-        use crate::web::types::CachedHtml;
-        use mongodb::bson::doc;
-
-        let final_source_lang = request.source_lang.unwrap_or_else(|| "auto".to_string());
-        let final_target_lang = request.target_lang.unwrap_or_else(|| "zh".to_string());
-
-        // 更新或插入完成的翻译结果
-        let filter = doc! {
-            "url": &request.url,
-            "source_lang": &final_source_lang,
-            "target_lang": &final_target_lang
-        };
-
-        let cached_html = CachedHtml {
-            url: request.url.clone(),
-            original_html: original_html.clone(),
-            translated_html: translated_html.clone(),
-            title: title.clone(),
-            source_lang: final_source_lang.clone(),
-            target_lang: final_target_lang.clone(),
-            status: "success".to_string(),
-            created_at: bson::DateTime::now(),
-            updated_at: bson::DateTime::now(),
-            expires_at: None, // 成功的翻译不设置过期时间
-            file_size: (original_html.len() + translated_html.len()) as i64,
-            domain: Some({
-                use url::Url;
-                if let Ok(parsed_url) = Url::parse(&request.url) {
-                    parsed_url.host_str().unwrap_or("unknown").to_string()
-                } else {
-                    "unknown".to_string()
-                }
-            }),
-        };
-
-        // 使用 upsert 操作更新或插入
-        match collection.replace_one(filter, &cached_html).upsert(true).await {
-            Ok(_) => {
-                tracing::info!("成功缓存翻译结果: {}", request.url);
-            }
-            Err(e) => {
-                tracing::error!("MongoDB缓存存储失败: {}", e);
-            }
-        }
-    }
+    // 轻量化版本：无持久化缓存，仅记录处理完成
+    tracing::info!("翻译处理完成: {}", request.url);
 
     let response = TranslateResponse {
         original_html,
@@ -316,8 +183,54 @@ pub async fn translate_url(
     Ok(Json(response))
 }
 
+/// 向后兼容的翻译处理器（已弃用）
+#[cfg(feature = "web")]
+pub async fn translate_url_deprecated(
+    State(state): State<Arc<AppState>>,
+    ExtractJson(request): ExtractJson<TranslateRequest>,
+) -> Result<Json<TranslateResponse>, (StatusCode, Json<serde_json::Value>)> {
+    tracing::warn!("使用了已弃用的 /api/translate 端点，建议使用 /api/process");
+    
+    // 将旧的翻译请求转换为新的处理请求
+    use crate::web::types::{ProcessRequest, ProcessOptions};
+    
+    let process_request = ProcessRequest {
+        url: request.url.clone(),
+        translate: Some(true),
+        target_lang: request.target_lang.clone(),
+        source_lang: request.source_lang.clone(),
+        options: Some(ProcessOptions {
+            no_css: Some(false),
+            no_js: Some(true),
+            no_images: Some(false),
+            no_fonts: Some(false),
+            timeout: Some(30),
+        }),
+    };
+    
+    // 调用新的统一处理器
+    match super::process::process_url(State(state), ExtractJson(process_request)).await {
+        Ok(Json(process_response)) => {
+            let translate_response = TranslateResponse {
+                original_html: process_response.original_html.unwrap_or_default(),
+                translated_html: process_response.translated_html.unwrap_or_default(),
+                title: process_response.title,
+                url: process_response.url,
+            };
+            Ok(Json(translate_response))
+        }
+        Err(error_response) => Err(error_response),
+    }
+}
+
 /// 非 web feature 的占位函数
 #[cfg(not(feature = "web"))]
 pub async fn translate_url() -> Result<String, String> {
+    Err("Web feature not enabled".to_string())
+}
+
+/// 非 web feature 的占位函数
+#[cfg(not(feature = "web"))]
+pub async fn translate_url_deprecated() -> Result<String, String> {
     Err("Web feature not enabled".to_string())
 }

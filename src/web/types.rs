@@ -57,8 +57,9 @@ pub struct ContentRequest {
 #[cfg(feature = "web")]
 #[derive(Serialize)]
 pub struct ContentResponse {
-    pub html: String,
-    pub title: Option<String>,
+    pub status: String,
+    pub message: Option<String>,
+    pub redirect_to: Option<String>,
     pub url: String,
 }
 
@@ -88,6 +89,42 @@ pub struct BookmarkletResponse {
     pub bookmarklet_code: String,
     pub installation_guide: String,
     pub example_usage: String,
+}
+
+/// 统一处理请求
+#[cfg(feature = "web")]
+#[derive(Deserialize)]
+pub struct ProcessRequest {
+    pub url: String,
+    pub translate: Option<bool>,
+    pub target_lang: Option<String>,
+    pub source_lang: Option<String>,
+    pub options: Option<ProcessOptions>,
+}
+
+/// 处理选项
+#[cfg(feature = "web")]
+#[derive(Deserialize)]
+pub struct ProcessOptions {
+    pub no_css: Option<bool>,
+    pub no_js: Option<bool>,
+    pub no_images: Option<bool>,
+    pub no_fonts: Option<bool>,
+    pub timeout: Option<u64>,
+}
+
+/// 统一处理响应
+#[cfg(feature = "web")]
+#[derive(Serialize)]
+pub struct ProcessResponse {
+    pub status: String,
+    pub original_html: Option<String>,
+    pub translated_html: Option<String>,
+    pub title: Option<String>,
+    pub url: String,
+    pub preview_url: Option<String>,
+    pub translate_enabled: bool,
+    pub target_lang: Option<String>,
 }
 
 // 非 web feature 的占位类型

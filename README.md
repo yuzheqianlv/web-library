@@ -181,7 +181,7 @@ cargo test --features="web,translation"
 - [ ] 批量处理优化
 - [ ] 自定义书签脚本
 
-## 📄 许可证
+## 📄 许可证s s s s s s s s s s s s ssssssssssssss
 
 本项目采用 [CC0 1.0 Universal](LICENSE) 许可证。
 

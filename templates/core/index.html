@@ -4,12 +4,269 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monolith 网页翻译器</title>
-    
+
     <!-- 新的CSS文件结构 -->
     <link rel="stylesheet" href="/assets/css/themes.css">
     <link rel="stylesheet" href="/assets/css/base.css">
     <link rel="stylesheet" href="/assets/css/components.css">
     <link rel="stylesheet" href="/assets/css/responsive.css">
+
+    <!-- 内联样式确保预览区域全覆盖 -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            height: 60px; /* 固定导航栏高度 */
+            background: var(--navbar-bg, #fff);
+            border-bottom: 1px solid var(--border-color, #e0e0e0);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .navbar.hidden {
+            transform: translateY(-100%);
+        }
+
+        .main-content {
+            position: fixed;
+            top: 60px; /* 导航栏高度 */
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            transition: top 0.3s ease;
+        }
+
+        .navbar.hidden + .main-content {
+            top: 0; /* 导航栏隐藏时占据全屏 */
+        }
+
+        .content-viewer {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .content-frame {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #fff;
+            display: none;
+        }
+
+        .content-frame.active {
+            display: block;
+        }
+
+        .bilingual-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+        }
+
+        .bilingual-container.active {
+            display: flex;
+        }
+
+        .bilingual-labels {
+            display: flex;
+            height: 40px;
+            background: var(--bg-secondary, #f5f5f5);
+            border-bottom: 1px solid var(--border-color, #e0e0e0);
+        }
+
+        .bilingual-label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            color: var(--text-secondary, #666);
+            border-right: 1px solid var(--border-color, #e0e0e0);
+        }
+
+        .bilingual-label:last-child {
+            border-right: none;
+        }
+
+        .bilingual-pane {
+            flex: 1;
+            border: none;
+            background: #fff;
+        }
+
+        .bilingual-pane:first-of-type {
+            border-right: 1px solid var(--border-color, #e0e0e0);
+        }
+
+        .sync-indicator {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            background: var(--bg-primary, #fff);
+            padding: 8px 12px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary, #666);
+            z-index: 10;
+        }
+
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success-color, #4caf50);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .empty-state, .loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-primary, #fff);
+            color: var(--text-primary, #333);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state.hidden, .loading.hidden {
+            display: none;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 24px;
+            color: var(--text-secondary, #666);
+        }
+
+        .empty-state h2 {
+            margin-bottom: 12px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .empty-state p {
+            font-size: 16px;
+            color: var(--text-secondary, #666);
+            max-width: 400px;
+        }
+
+        .loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border-color, #e0e0e0);
+            border-top: 4px solid var(--primary-color, #2196f3);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .floating-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary-color, #2196f3);
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .floating-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+        }
+
+        .floating-toggle svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .navbar.hidden ~ .floating-toggle {
+            display: flex;
+        }
+
+        .error-toast, .success-toast {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            max-width: 400px;
+            padding: 16px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1001;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .error-toast {
+            background: var(--error-color, #f44336);
+        }
+
+        .success-toast {
+            background: var(--success-color, #4caf50);
+        }
+
+        .error-toast.show, .success-toast.show {
+            transform: translateX(0);
+        }
+    </style>
 </head>
 <body class="theme-light">
     <!-- 置顶导航栏 -->
@@ -85,11 +342,13 @@
                     <div class="bilingual-label">译文</div>
                     <div class="bilingual-label">原文</div>
                 </div>
-                
+
                 <!-- 双语对照iframe -->
-                <iframe class="bilingual-pane" id="bilingual-translated"></iframe>
-                <iframe class="bilingual-pane" id="bilingual-original"></iframe>
-                
+                <div style="display: flex; flex: 1;">
+                    <iframe class="bilingual-pane" id="bilingual-translated"></iframe>
+                    <iframe class="bilingual-pane" id="bilingual-original"></iframe>
+                </div>
+
                 <!-- 同步状态指示器 -->
                 <div class="sync-indicator" id="sync-indicator">
                     <div class="sync-dot"></div>
@@ -107,7 +366,7 @@
             </div>
 
             <!-- 加载状态 -->
-            <div class="loading" id="loading">
+            <div class="loading hidden" id="loading">
                 <div class="spinner"></div>
                 <p>正在翻译网页，请稍候...</p>
             </div>
@@ -124,18 +383,31 @@
     <!-- 核心模块 -->
     <script src="/assets/js/core/api.js"></script>
     <script src="/assets/js/core/app.js"></script>
-    
+
     <!-- 组件模块 -->  
     <script src="/assets/js/components/theme.js"></script>
     <script src="/assets/js/components/translator.js"></script>
     <script src="/assets/js/components/ui.js"></script>
-    
+
     <!-- 初始化脚本 -->
     <script>
         // 确保DOM加载完成后初始化应用
         document.addEventListener('DOMContentLoaded', () => {
             console.log('🚀 Monolith 网页翻译器启动');
-            
+
+            // 导航栏切换功能
+            const navbar = document.getElementById('navbar');
+            const toggleBtn = document.getElementById('toggle-nav-btn');
+            const floatingToggle = document.getElementById('floating-toggle');
+
+            toggleBtn?.addEventListener('click', () => {
+                navbar.classList.toggle('hidden');
+            });
+
+            floatingToggle?.addEventListener('click', () => {
+                navbar.classList.remove('hidden');
+            });
+
             // 应用管理器已在 core/app.js 中自动初始化
             // 其他组件将由应用管理器统一管理
         });
