@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/assets/css/themes.css">
     <link rel="stylesheet" href="/assets/css/base.css">
     <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/nav-toggle.css">
     <link rel="stylesheet" href="/assets/css/responsive.css">
 
     <!-- 内联样式确保预览区域全覆盖 -->
@@ -388,6 +389,7 @@
     <script src="/assets/js/components/theme.js"></script>
     <script src="/assets/js/components/translator.js"></script>
     <script src="/assets/js/components/ui.js"></script>
+    <script src="/assets/js/components/nav-toggle.js"></script>
 
     <!-- 初始化脚本 -->
     <script>
@@ -395,19 +397,9 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log('🚀 Monolith 网页翻译器启动');
 
-            // 导航栏切换功能
-            const navbar = document.getElementById('navbar');
-            const toggleBtn = document.getElementById('toggle-nav-btn');
-            const floatingToggle = document.getElementById('floating-toggle');
-
-            toggleBtn?.addEventListener('click', () => {
-                navbar.classList.toggle('hidden');
-            });
-
-            floatingToggle?.addEventListener('click', () => {
-                navbar.classList.remove('hidden');
-            });
-
+            // 注意：导航栏切换功能现在由独立的 NavToggleComponent 处理
+            // 组件已在 nav-toggle.js 中自动初始化
+            
             // 应用管理器已在 core/app.js 中自动初始化
             // 其他组件将由应用管理器统一管理
         });

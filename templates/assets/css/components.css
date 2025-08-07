@@ -256,27 +256,7 @@
     height: 1.5rem;
 }
 
-/* 切换导航栏按钮 */
-.toggle-nav-btn {
-    background: transparent;
-    border: none;
-    color: var(--theme-text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.toggle-nav-btn:hover {
-    background: var(--theme-bg-secondary);
-}
-
-.toggle-nav-btn svg {
-    width: 1.5rem;
-    height: 1.5rem;
-}
+/* 切换导航栏按钮样式已移至 base.css 以避免重复定义 */
 
 /* 书签脚本链接 */
 .bookmarklet-link {

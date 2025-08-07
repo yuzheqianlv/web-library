@@ -28,10 +28,8 @@ class MonolithApp {
             emptyState: document.getElementById('empty-state'),
             loading: document.getElementById('loading'),
             errorToast: document.getElementById('error-toast'),
-            successToast: document.getElementById('success-toast'),
-            navbar: document.getElementById('navbar'),
-            toggleNavBtn: document.getElementById('toggle-nav-btn'),
-            floatingToggle: document.getElementById('floating-toggle')
+            successToast: document.getElementById('success-toast')
+            // 注意：导航栏切换相关元素已移至 NavToggleComponent 管理
         };
     }
 
@@ -58,14 +56,7 @@ class MonolithApp {
             });
         });
 
-        // 导航栏切换事件
-        this.elements.toggleNavBtn?.addEventListener('click', () => {
-            this.toggleNavbar();
-        });
-
-        this.elements.floatingToggle?.addEventListener('click', () => {
-            this.toggleNavbar();
-        });
+        // 注意：导航栏切换事件现在由 NavToggleComponent 处理
 
         // 页面加载时检查URL参数
         this.checkUrlParams();
@@ -208,19 +199,9 @@ class MonolithApp {
     }
 
     /**
-     * 切换导航栏显示
+     * 注意：导航栏切换功能已移至 NavToggleComponent
+     * 如需访问导航栏切换功能，请使用 window.navToggleComponent
      */
-    toggleNavbar() {
-        const isHidden = this.elements.navbar?.classList.contains('hidden');
-        
-        if (isHidden) {
-            this.elements.navbar?.classList.remove('hidden');
-            this.elements.floatingToggle?.classList.remove('show');
-        } else {
-            this.elements.navbar?.classList.add('hidden');
-            this.elements.floatingToggle?.classList.add('show');
-        }
-    }
 
     /**
      * 设置处理状态
